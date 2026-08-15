@@ -2,8 +2,7 @@
 
 Kept as a single module while the schema is small (see
 `docs/architecture/domain-model.md`); split into per-concept modules if this
-grows unwieldy as later tickets add `EvidencePack`,
-`NarrativeInstrumentImpact`, etc.
+grows unwieldy as later tickets add `NarrativeInstrumentImpact`, etc.
 """
 
 from __future__ import annotations
@@ -11,7 +10,7 @@ from __future__ import annotations
 import enum
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, String, Text
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -194,6 +193,15 @@ class Narrative(Base):
 
     narrative_events: Mapped[list[NarrativeEvent]] = relationship(back_populates="narrative")
 
+    # `Narrative 1 --1 EvidencePack` per domain-model.md Relationships: this
+    # is literal, not conditional (see EvidencePack docstring) — every
+    # Narrative is expected to have exactly one EvidencePack, created by
+    # `market_intel.evidence.service.EvidencePackService` alongside the
+    # Narrative itself.
+    evidence_pack: Mapped[EvidencePack | None] = relationship(
+        back_populates="narrative", uselist=False
+    )
+
 
 class NarrativeEvent(Base):
     """The assignment of an `Event` to a `Narrative`, produced by the narrative engine.
@@ -220,4 +228,48 @@ class NarrativeEvent(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+
+
+class EvidencePack(Base):
+    """The aggregated evidence for a `Narrative`: source traceability plus an
+    independent-source count (`docs/architecture/domain-model.md` Core
+    Concepts).
+
+    `narrative_id` is unique + not-null, enforcing the literal (not
+    conditional) `Narrative 1 --1 EvidencePack` relationship
+    (domain-model.md Relationships): an `EvidencePack` is created together
+    with its `Narrative` and rebuilt/grown as further `NarrativeEvent`s are
+    assigned, by `market_intel.evidence.service.EvidencePackService`. No
+    redundant join table for traceability — it is derived on demand via the
+    existing `Narrative -> NarrativeEvent -> Event -> Document` chain (see
+    `market_intel.evidence.aggregation`), not persisted separately.
+
+    Per the Invariants/Protected Semantics in domain-model.md ("An
+    EvidencePack cannot exist without source traceability"),
+    `EvidencePackService` never persists a row here backed by zero
+    traceable Documents; this model itself has no way to express that
+    constraint declaratively, so it is enforced at the business-logic layer
+    (`EvidencePackService.build_or_update`), not by a DB-level CHECK.
+    """
+
+    __tablename__ = "evidence_packs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    narrative_id: Mapped[int] = mapped_column(
+        ForeignKey("narratives.id"), nullable=False, unique=True, index=True
+    )
+    narrative: Mapped[Narrative] = relationship(back_populates="evidence_pack")
+
+    independent_source_count: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )

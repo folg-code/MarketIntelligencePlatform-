@@ -141,12 +141,26 @@ None currently. (Resolved: Ticket 3 fetches full press-release text from
   module docstring yet. Accepted as a known MVP limitation (Ticket 4
   review, minor, non-blocking); consider adding an explicit docstring note.
 - No integration test yet proves `NarrativeAssignmentService.assign()`'s
-  real `select(...)` executes correctly against a live Postgres session
-  (only the schema was proven live, via migration verification; the
-  service's query logic is proven only against a fake session double,
-  which now at least asserts the correct column/operator is used). Track
-  as follow-up once an integration-DB test fixture exists — likely needed
-  by Ticket 5 (EvidencePack builder) anyway. Ticket 4 review finding.
+  or `EvidencePackService.build_or_update()`'s real `select(...)`
+  executes correctly against a live Postgres session (only the schema
+  was proven live, via migration verification; both services' query
+  logic is proven only against a fake session double, each of which now
+  at least asserts the correct column/operator is used). Track as
+  follow-up once an integration-DB test fixture exists. Ticket 4 review
+  finding, broadened at Ticket 5 review to explicitly cover
+  `EvidencePackService` too.
+- `docs/architecture/domain-model.md`/`ai-and-evidence.md` state the
+  Protected Semantics rule that syndicated repeats of one originating
+  report must count as one independent source, not many — but Ticket
+  5's `compute_independent_source_count` only implements the trivial
+  case (the same `document_id` referenced twice counts once); true
+  cross-Document syndication detection (two distinct Documents
+  republishing one wire story) is unimplemented and untested, per the
+  architect's explicit "no syndication-detection logic needed yet"
+  scoping for the single-source MVP milestone. Not a defect for this
+  ticket, but flagged so a future reader doesn't mistake the Protected
+  Semantics line for an already-complete guarantee. Ticket 5 review
+  finding; revisit once a second source is added (Milestone 2+).
 
 ## Recent Material Discoveries
 
@@ -172,11 +186,141 @@ None currently. (Resolved: Ticket 3 fetches full press-release text from
 4. Run `MILESTONE READINESS GATE` once Wave 1 delivers Milestone 1's
    Acceptance Expectations.
 
+## Process Change: contribution-policy + documentation-gate enforcement + parallelization
+
+Per explicit user instruction (2026-08-15): `contribution-policy.md` was
+defined but never wired into any workflow stage's `required_policies`, and
+`DOCUMENTATION_GATE` was being skipped (tickets 1-4 went straight from
+REVIEW to DONE without an explicit documentation check). Fixed:
+
+- `.cursor/policy/execution-map.md` — `contribution-policy` added to
+  `IMPLEMENTATION`, `REVIEW`, and `DONE` stage policies for `feature`,
+  `bug`, and `refactor` workflows, and to `lightweight`.
+- `.cursor/policy/workflow-rules.md` — new "Parallel Execution" section:
+  dispatch independent stages/tickets concurrently when no blocking
+  dependency exists AND `write_scope` doesn't overlap; pipeline instead of
+  parallelize when `write_scope` overlaps (e.g. a shared file or linear
+  migration chain); read-only stages (architecture assessment,
+  independent validation, review) default to parallel whenever the units
+  are independent.
+- `DOCUMENTATION_GATE` will now be run and explicitly logged (even when
+  the answer is "no durable truth changed") before any ticket is marked
+  DONE, instead of being implicitly skipped.
+- One-time exception, by explicit user decision: tickets 1-4 and the
+  `.cursor/`/`docs/` framework work were never branched/PR'd per ticket
+  (all still sat uncommitted on `main` — only 2 commits existed in the
+  entire history before this). Rather than backfill per-ticket
+  branches/PRs retroactively, this was squashed into one collective
+  commit (`8e7a229`) pushed directly to `main` (no PR — nothing to PR
+  against once already on the target branch; a PR would have required a
+  history-rewriting reset that was correctly flagged as unsafe to
+  auto-run). **Starting with Ticket 5**, every ticket gets its own branch
+  (`feat/wave1-ticketN-<slug>`), Conventional Commit-style commits, and a
+  real PR pushed to `origin` (`folg-code/MarketIntelligencePlatform-`).
+- `planning/waves/wave-01-foundation-and-tracer-slice.md` Parallelizable
+  Work section corrected: tickets 5 and 6 were wrongly documented as
+  sequential — both consume ticket 4's output but not each other's, so
+  their `ARCHITECTURE_GATE`/`VALIDATION`/`REVIEW` stages run in parallel;
+  `IMPLEMENTATION` is pipelined (not concurrent) because both touch the
+  shared `persistence/models.py` and the linear Alembic migration chain
+  (resolved via `alembic merge` for the resulting two heads).
+
 ## Next Actions
 
-- Dispatch Wave 1 Ticket 5 (EvidencePack builder — real source traceability
-  and independent-source counting, persisted) through the `feature`
-  workflow stage gates.
+- Wave 1 / Ticket 5 — EvidencePack builder. ARCHITECTURE_GATE **APPROVE**
+  (impact CROSS_MODULE, architect): `EvidencePack` is a separate table
+  (`narrative_id` FK unique+not-null, `independent_source_count`,
+  timestamps), created together with its `Narrative` and rebuilt/grown as
+  `NarrativeEvent`s are added — architect clarified this directly in
+  `docs/architecture/domain-model.md` (Relationships) since it resolved an
+  ambiguity in already-accepted text. Stays a fully separate component
+  from `narrative_engine` (ticket 8/scheduler sequences the two, ticket 5
+  does not touch ticket 4's files). "Real, not hardcoded" means genuine
+  `COUNT(DISTINCT document_id)` over reachable Documents — no
+  syndication-detection logic needed yet (single-source milestone; that's
+  speculative extensibility for now). Source traceability is derived via
+  the existing `Narrative -> NarrativeEvent -> Event -> Document` chain,
+  no redundant join table. No ADR. Dispatching to engineer for
+  IMPLEMENTATION now (does not wait on Ticket 6's gate, per the
+  pipelining rule).
+  **IMPLEMENTATION done (commit `037639a`)**: `EvidencePack` model,
+  migration, pure `COUNT(DISTINCT document_id)` aggregation, thin async
+  service refusing zero-traceable-Document packs, 9 new tests (57/57
+  full suite passing at the time), migration verified live against a
+  disposable Postgres 16 container. Validation was deferred while
+  Ticket 6 (independent, parallel) went through an unusually long
+  7-round fix/validate cycle (see Ticket 6's own branch/PR #1 for that
+  full history) — no changes to this ticket's implementation since.
+  Dispatching first VALIDATION pass now that Ticket 6 is closed out.
+  **VALIDATION: PASS, first attempt, no findings.** Tester independently
+  verified the single most important correctness property with a
+  throwaway script against the real code path (not just trusting test
+  names): two `Event`s sharing one `document_id` correctly dedup to an
+  independent-source count of 1 (not 2); two `Event`s on distinct
+  Documents correctly count as 2. Also independently exercised the
+  zero-traceable-Document refusal (rigged a fake session's `add()` to
+  raise, confirmed it's never called before the guard fires), confirmed
+  no LLM/HTTP import anywhere in the aggregation module, confirmed no
+  `narrative_engine` files touched, confirmed migration chain is a
+  single clean head. 57/57 tests, ruff clean. Proceeding to REVIEW.
+  **REVIEW: PASS_WITH_NOTES.** Confirmed diff scope clean (only Ticket
+  5's own files across 3 commits), `narrative_id` FK genuinely
+  unique+not-null (literal 1--1, not optional), `narrative_engine`
+  boundary held (zero overlap, grepped directly), aggregation is
+  genuine `COUNT(DISTINCT document_id)` via a pure function with no
+  DB/LLM/HTTP dependency, 9 tests are behaviorally meaningful (dedup,
+  growth, refusal, create-vs-update). Confirmed no Ticket 6 content
+  leaked onto this branch. Non-blocking notes actioned: (1) reviewer's
+  sandbox couldn't independently run pytest/ruff — orchestrator
+  independently re-ran, 57/57 pass, ruff clean, closing that gap; (2)
+  syndication-detection scope gap and (3) live-Postgres integration-test
+  gap both added to Tracked Technical Debt above; (4) this branch's
+  `planning/current.md` chore commit bundling Ticket 6 notes is a known,
+  already-anticipated merge-reconciliation item (both tickets' final
+  planning-log content will need manual reconciliation on `main`, not a
+  blocker for either individual PR).
+  **DOCUMENTATION_GATE: run explicitly, logged (not skipped).** Two
+  small tracked-debt additions made (above); no `domain-model.md`/
+  `ai-and-evidence.md` edit needed beyond the architect's earlier
+  literal-1--1 clarification (already committed) — both docs already
+  state the governing policy at the correct level of abstraction. Gate:
+  PASS.
+  **Ticket 5: DONE.** Pushed to `origin/feat/wave1-ticket5-evidence-
+  pack`; PR opened: https://github.com/folg-code/MarketIntelligencePlatform-/pull/2.
+- Wave 1 / Ticket 6 — Instrument impact assessor. ARCHITECTURE_GATE
+  **APPROVE** (impact CROSS_MODULE, architect): stays fully deterministic/
+  rule-based per `overview.md`'s already-accepted boundary (no new LLM
+  call from this component; ADR-001's permission for LLM-drafted impact
+  stays available for a later ticket, most plausibly by extending event
+  extraction, not by giving this component its own LLM boundary).
+  Deterministic logic must be a genuine documented rule procedure over
+  Event/Narrative content, not bare keyword/entity-presence matching
+  (reviewer must check this explicitly). Concrete `direction` enum
+  (`strongly_bearish`..`strongly_bullish`, `mixed`, `uncertain`) and
+  `horizon` enum (`intraday`/`multi_day`/`unknown`) promoted from
+  `docs/product/MVP_Vision_Architecture_Decisions.md` §7 into
+  `domain-model.md` as canonical domain truth. `NarrativeInstrumentImpact`
+  needs its own `unconfirmed`/(future `confirmed`) status enum, separate
+  from `Narrative.validity_status`, and **must** set
+  `values_callable=lambda e: [m.value for m in e]` (the ticket-4 enum bug
+  must not repeat here). `instrument` is a closed 3-value enum (NQ/BTC/
+  GOLD), not a growing entity. `relevance` type is a genuine local choice
+  (no doc settles it). No EvidencePack required first (unconfirmed impact
+  isn't yet a "material conclusion").
+  **Process note:** this architect's doc edit to `domain-model.md`
+  (Terminology: direction/horizon enums, confirmation-state field) landed
+  in the same shared working tree while Ticket 5's branch was already
+  checked out, and got swept into Ticket 5's doc commit — caught and
+  fixed by amending that commit back down to only Ticket 5's content; the
+  Ticket 6 content is sitting uncommitted for now (safe, additive, no
+  conflict with Ticket 5's in-progress code) and will be committed to
+  Ticket 6's own branch once Ticket 5's implementation lands (git
+  surgery — stash/checkout — is deferred until the Ticket 5 engineer
+  subagent, which is actively writing files right now, finishes, to
+  avoid disturbing its in-progress work). Real lesson for future parallel
+  ARCHITECTURE_GATE dispatches touching shared docs: either serialize doc
+  edits specifically, or accept this kind of cleanup step as the cost of
+  parallelizing analysis stages in one working tree.
 
 ## Replanning Triggers
 
