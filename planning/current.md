@@ -91,6 +91,20 @@ on each.
   Dispatched a targeted fix (require a rate/target-range anchor
   alongside the verb + regression test for this exact case) back to
   engineer; re-VALIDATION required once that lands.
+  **Fix #1 (commit `50efb6e`) also FAILED re-VALIDATION**: tester
+  constructed a new counter-example the anchor-co-occurrence check
+  doesn't catch — a fact containing BOTH a genuine hold ("target range
+  ... unchanged") AND an unrelated use of a hike-trigger word ("raised
+  objections") still gets classified as a confident HIKE, because the
+  anchor+verb check is whole-string/unordered with no clause binding, and
+  `_classify_fact` checks HIKE before CUT/HOLD. This is worse than the
+  original bug (confidently wrong directional call instead of falling
+  through to uncertain) and the same conceptual Protected Semantics
+  violation via a narrower door. Judged not acceptable MVP scope — this
+  is a second, structurally-related failure of the same design approach,
+  not an unrelated new defect. Escalating the fix approach itself (not
+  just another narrow regex patch): dispatching clause-scoped
+  classification back to engineer.
 
 ## Blockers
 
