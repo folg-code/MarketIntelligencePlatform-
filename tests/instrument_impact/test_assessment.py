@@ -115,6 +115,93 @@ def test_a_trigger_verb_used_outside_a_rate_target_range_context_is_not_classifi
     assert assessment.horizon is ImpactHorizon.UNKNOWN
 
 
+def test_a_hold_fact_with_an_unrelated_trailing_dissent_clause_is_not_classified_as_a_hike() -> (
+    None
+):
+    """Reproduces the second-round validation counter-example: a genuine
+
+    HOLD clause ("the target range unchanged") followed by an unrelated
+    "after ... raised ..." clause about member dissent must not let the
+    unrelated clause's "raised" outrank the real "unchanged" signal. Before
+    clause-scoping, whole-string anchor+verb co-occurrence (with no clause
+    binding) wrongly classified this as a hike because `_HIKE_PATTERNS` was
+    checked first and "raised" appeared somewhere in the string.
+    """
+    event = _rate_decision_event(
+        "The Committee left the target range unchanged after some members "
+        "raised objections."
+    )
+
+    assessment = assess_impact([event], instrument=Instrument.NQ)
+
+    assert assessment.direction is ImpactDirection.NEUTRAL
+    assert assessment.horizon is ImpactHorizon.MULTI_DAY
+    assert "unchanged" in assessment.rationale
+
+
+def test_a_hold_fact_with_a_though_clause_dissent_is_not_classified_as_a_hike() -> None:
+    """Same failure mode as above, different conjunction/phrasing: the
+
+    tester's second counter-example uses ", though ... raised ..." instead
+    of "after ... raised ...".
+    """
+    event = _rate_decision_event(
+        "The Committee kept the target range unchanged, though one member "
+        "raised a dissent."
+    )
+
+    assessment = assess_impact([event], instrument=Instrument.NQ)
+
+    assert assessment.direction is ImpactDirection.NEUTRAL
+    assert assessment.horizon is ImpactHorizon.MULTI_DAY
+    assert "unchanged" in assessment.rationale
+
+
+def test_a_hike_verb_before_an_unrelated_hold_clause_is_not_classified_as_a_hold() -> None:
+    """Adversarial test devised independently of the tester's examples: puts
+
+    the unrelated trigger-verb clause *before* the real anchor+verb clause
+    (tester's examples both had the unrelated clause trailing), to check
+    that clause-scoping is order-agnostic rather than only correct for a
+    "real clause first, bogus clause after" layout. Also exercises the
+    "although" splitter rather than "after"/"though". If clause-scoping
+    only worked in one direction, this would wrongly classify as HOLD when
+    the real, and only, actionable clause is the CUT-free "raised
+    objections" (no anchor, contributes nothing) followed by a HOLD clause
+    that *does* have an anchor+verb pair — so the expected outcome here is
+    still a correct NEUTRAL/HOLD, but arrived at from the opposite layout.
+    """
+    event = _rate_decision_event(
+        "Although one member raised objections, the Committee maintained "
+        "the target range unchanged."
+    )
+
+    assessment = assess_impact([event], instrument=Instrument.NQ)
+
+    assert assessment.direction is ImpactDirection.NEUTRAL
+    assert assessment.horizon is ImpactHorizon.MULTI_DAY
+    assert "maintained the target range" in assessment.rationale
+
+
+def test_a_fact_with_two_independently_valid_but_conflicting_clauses_is_mixed() -> None:
+    """A single fact can itself be internally self-contradictory (e.g. a
+
+    single sentence conflating an earlier and a later decision); each of
+    its clauses independently has its own valid anchor+verb pair, but with
+    different actions. This should resolve via the existing mixed-signal
+    path rather than silently picking a winner between the two clauses.
+    """
+    event = _rate_decision_event(
+        "The Committee raised the target range in the September meeting, "
+        "although the June statement had lowered the target range."
+    )
+
+    assessment = assess_impact([event], instrument=Instrument.NQ)
+
+    assert assessment.direction is ImpactDirection.MIXED
+    assert assessment.horizon is ImpactHorizon.UNKNOWN
+
+
 def test_an_instrument_with_no_documented_mapping_is_assessed_as_uncertain_not_reusing_nq() -> None:
     event = _rate_decision_event(
         "The Committee raised the target range for the federal funds rate."
