@@ -76,8 +76,21 @@ on each.
   persisted values are lowercase), deterministic rule procedure over
   `rate_decision` events -> NQ direction with fact-quoting rationale, 11
   new tests, 59/59 passing, migration verified live (upgrade/downgrade/
-  re-upgrade, enum lowercase values confirmed via `psql`). Pending
-  VALIDATION/REVIEW.
+  re-upgrade, enum lowercase values confirmed via `psql`). Tester
+  VALIDATION: **FAIL** — all 5 listed acceptance criteria independently
+  verified and passing, but the tester was specifically asked to judge
+  whether the rule procedure was genuinely non-keyword-inferred, and
+  found and reproduced a real defect: a `rate_decision`-typed Event whose
+  `extracted_facts` contains an unrelated sentence using a trigger verb
+  (e.g. "The Chair **raised** concerns about persistent inflation risks")
+  gets confidently misclassified as a hike, because `_classify_fact`
+  matches bare verbs anywhere in the fact text with no requirement that
+  the matched clause is actually about the target range/rate — exactly
+  the "never inferred from keywords alone" Protected Semantics violation
+  the architect flagged as a risk to watch for. No test covered this.
+  Dispatched a targeted fix (require a rate/target-range anchor
+  alongside the verb + regression test for this exact case) back to
+  engineer; re-VALIDATION required once that lands.
 
 ## Blockers
 
