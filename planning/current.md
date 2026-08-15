@@ -16,7 +16,12 @@ Pipeline. Status: **APPROVED**.
 ## Current Wave
 
 `planning/waves/wave-01-foundation-and-tracer-slice.md` — Foundation And
-Tracer Slice. Ticket 5 (EvidencePack builder) not yet dispatched.
+Tracer Slice. Tickets 5 and 6 implemented on their own branches
+(`feat/wave1-ticket5-evidence-pack`, `feat/wave1-ticket6-instrument-impact`
+— note: this file's content diverges slightly per branch since each
+ticket now carries its own operational-note updates per
+`contribution-policy`; reconcile at merge time), pending VALIDATION/REVIEW
+on each.
 
 ## Active Work
 
@@ -52,11 +57,27 @@ Tracer Slice. Ticket 5 (EvidencePack builder) not yet dispatched.
   gap immediately (cheap, in-file, no new infra) — orchestrator applied
   this directly: `FakeAsyncSession.scalar` now asserts the comparison
   actually filters on `Narrative.canonical_key` (table+column identity) and
-  uses equality, not just that some literal value was bound. Verified the
-  fix by (a) confirming a deliberately-wrong-column query now raises
-  instead of silently passing, (b) full suite still 48/48, ruff clean —
-  this machine's local `.venv` can run `pytest`/`ruff` directly, unlike the
-  subagent sandboxes used for review/validation so far. **Ticket 4: DONE.**
+  uses equality, not just that some literal value was bound. **Ticket 4:
+  DONE**, merged into the collective bootstrap commit (`8e7a229`).
+- Wave 1 / Ticket 5 — EvidencePack builder, on
+  `feat/wave1-ticket5-evidence-pack`. ARCHITECTURE_GATE APPROVE (see
+  git history on that branch / prior agent transcripts for full detail).
+  IMPLEMENTATION done (commit `037639a`): `EvidencePack` model, migration,
+  pure aggregation (`COUNT(DISTINCT document_id)`), thin async service
+  refusing zero-traceable-Document packs, 9 new tests, 57/57 passing,
+  migration verified live. Pending VALIDATION/REVIEW.
+- Wave 1 / Ticket 6 — Instrument impact assessor, on
+  `feat/wave1-ticket6-instrument-impact` (branched from Ticket 4's
+  baseline, independent of Ticket 5). ARCHITECTURE_GATE APPROVE: stays
+  deterministic (no LLM call), concrete direction/horizon enums and a
+  confirmation-state field added to `domain-model.md`. IMPLEMENTATION done
+  (commit `7721602`): `NarrativeInstrumentImpact` model + 4 new enums
+  (correctly using `values_callable` this time — verified live that
+  persisted values are lowercase), deterministic rule procedure over
+  `rate_decision` events -> NQ direction with fact-quoting rationale, 11
+  new tests, 59/59 passing, migration verified live (upgrade/downgrade/
+  re-upgrade, enum lowercase values confirmed via `psql`). Pending
+  VALIDATION/REVIEW.
 
 ## Blockers
 
