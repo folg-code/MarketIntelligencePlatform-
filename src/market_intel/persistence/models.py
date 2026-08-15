@@ -193,6 +193,148 @@ class Narrative(Base):
     )
 
     narrative_events: Mapped[list[NarrativeEvent]] = relationship(back_populates="narrative")
+    instrument_impacts: Mapped[list[NarrativeInstrumentImpact]] = relationship(
+        back_populates="narrative"
+    )
+
+
+class Instrument(enum.StrEnum):
+    """The closed set of instruments the platform assesses impact for.
+
+    Per `docs/architecture/domain-model.md` (Domain Summary, Relationships),
+    this is a fixed 3-value enum, not a lookup entity/table: the MVP tracks
+    impact for exactly NQ, BTC, and GOLD, and adding a fourth instrument is
+    a product/architecture decision, not a data-entry operation.
+    """
+
+    NQ = "nq"
+    BTC = "btc"
+    GOLD = "gold"
+
+
+class ImpactDirection(enum.StrEnum):
+    """Directional assessment of a `NarrativeInstrumentImpact`.
+
+    Exact value set from `docs/architecture/domain-model.md` Terminology
+    (`docs/product/MVP_Vision_Architecture_Decisions.md` §7): this replaces
+    generic sentiment and is intentionally not collapsed to a 3-value
+    bearish/neutral/bullish scale — `mixed` (opposing credible channels) and
+    `uncertain` (insufficient evidence) are distinct from `neutral`
+    (impact believed limited/non-directional).
+    """
+
+    STRONGLY_BEARISH = "strongly_bearish"
+    BEARISH = "bearish"
+    MIXED = "mixed"
+    NEUTRAL = "neutral"
+    BULLISH = "bullish"
+    STRONGLY_BULLISH = "strongly_bullish"
+    UNCERTAIN = "uncertain"
+
+
+class ImpactHorizon(enum.StrEnum):
+    """How long a `NarrativeInstrumentImpact`'s assessed impact stays relevant.
+
+    Exact value set from `docs/architecture/domain-model.md` Terminology
+    (`docs/product/MVP_Vision_Architecture_Decisions.md` §7).
+    """
+
+    INTRADAY = "intraday"
+    MULTI_DAY = "multi_day"
+    UNKNOWN = "unknown"
+
+
+class ImpactConfirmationState(enum.StrEnum):
+    """Confirmation state of a `NarrativeInstrumentImpact` itself.
+
+    Distinct from `Narrative.validity_status` (`docs/architecture/domain-model.md`
+    Terminology). This ticket only ever produces `UNCONFIRMED` rows; `CONFIRMED`
+    is added now as an unused member (a later ticket's validation layer,
+    `ADR-001`, is the only code path allowed to move a row out of
+    `UNCONFIRMED`) rather than deferring the enum value itself.
+    """
+
+    UNCONFIRMED = "unconfirmed"
+    CONFIRMED = "confirmed"
+
+
+class NarrativeInstrumentImpact(Base):
+    """An explicit, auditable relation between a `Narrative` and an `Instrument`.
+
+    Per `docs/architecture/domain-model.md` (Invariants, Protected Semantics),
+    this relation must always be an explicit assessment result — never
+    inferred solely from entity/keyword presence — produced by
+    `market_intel.instrument_impact`. This ticket only creates rows with
+    `confirmation_state=UNCONFIRMED`; moving a row to `CONFIRMED` is reserved
+    for a later ticket's validation layer.
+    """
+
+    __tablename__ = "narrative_instrument_impacts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    narrative_id: Mapped[int] = mapped_column(
+        ForeignKey("narratives.id"), nullable=False, index=True
+    )
+    narrative: Mapped[Narrative] = relationship(back_populates="instrument_impacts")
+
+    instrument: Mapped[Instrument] = mapped_column(
+        Enum(
+            Instrument,
+            native_enum=False,
+            validate_strings=True,
+            length=50,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
+    )
+    direction: Mapped[ImpactDirection] = mapped_column(
+        Enum(
+            ImpactDirection,
+            native_enum=False,
+            validate_strings=True,
+            length=50,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
+    )
+    # Unconstrained 0-1 float, mirroring `Event.confidence`'s convention (no
+    # documented range/semantics beyond "a relevance value"; see
+    # `ImplementationReport.assumptions`).
+    relevance: Mapped[float] = mapped_column(Float, nullable=False)
+    horizon: Mapped[ImpactHorizon] = mapped_column(
+        Enum(
+            ImpactHorizon,
+            native_enum=False,
+            validate_strings=True,
+            length=50,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
+    )
+    rationale: Mapped[str] = mapped_column(Text, nullable=False)
+
+    confirmation_state: Mapped[ImpactConfirmationState] = mapped_column(
+        Enum(
+            ImpactConfirmationState,
+            native_enum=False,
+            validate_strings=True,
+            length=50,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
+        default=ImpactConfirmationState.UNCONFIRMED,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
 
 
 class NarrativeEvent(Base):
