@@ -483,6 +483,91 @@ def test_a_hyphenated_compound_word_between_anchor_and_verb_is_not_a_new_false_n
     assert assessment.horizon is ImpactHorizon.UNKNOWN
 
 
+def test_an_ellipsis_clause_join_with_raised_does_not_turn_a_hold_into_mixed() -> None:
+    """Round-6 validation counter-example: an ellipsis (`…`) used as a
+    clause-joiner between a genuine HOLD anchor+verb pair and an unrelated
+    "raised" clause. Not in any enumerated punctuation blocklist from
+    rounds 4-6; closed by the allowlist-by-complement character check
+    (`_DISALLOWED_BETWEEN_SPAN_CHARACTER_PATTERN`) instead.
+    """
+    event = _rate_decision_event("The target range held… someone raised objections.")
+
+    assessment = assess_impact([event], instrument=Instrument.NQ)
+
+    assert assessment.direction is ImpactDirection.NEUTRAL
+    assert assessment.horizon is ImpactHorizon.MULTI_DAY
+    assert "held" in assessment.rationale
+
+
+def test_a_bullet_clause_join_with_raised_does_not_turn_a_hold_into_mixed() -> None:
+    """Same failure mode as the ellipsis case above, using a bullet (`•`) as
+    the clause-joiner instead.
+    """
+    event = _rate_decision_event("• The target range held • Someone raised objections")
+
+    assessment = assess_impact([event], instrument=Instrument.NQ)
+
+    assert assessment.direction is ImpactDirection.NEUTRAL
+    assert assessment.horizon is ImpactHorizon.MULTI_DAY
+    assert "held" in assessment.rationale
+
+
+def test_a_slash_clause_join_with_raised_does_not_turn_a_hold_into_mixed() -> None:
+    """Same failure mode again, using a slash (`/`) as the clause-joiner."""
+    event = _rate_decision_event("The target range held/someone raised objections")
+
+    assessment = assess_impact([event], instrument=Instrument.NQ)
+
+    assert assessment.direction is ImpactDirection.NEUTRAL
+    assert assessment.horizon is ImpactHorizon.MULTI_DAY
+    assert "held" in assessment.rationale
+
+
+def test_an_ampersand_clause_join_with_raised_does_not_turn_a_hold_into_mixed() -> None:
+    """Same failure mode again, using an ampersand (`&`) as the clause-joiner."""
+    event = _rate_decision_event("The target range held & someone raised objections")
+
+    assessment = assess_impact([event], instrument=Instrument.NQ)
+
+    assert assessment.direction is ImpactDirection.NEUTRAL
+    assert assessment.horizon is ImpactHorizon.MULTI_DAY
+    assert "held" in assessment.rationale
+
+
+def test_a_pipe_clause_join_with_raised_does_not_turn_a_hold_into_mixed() -> None:
+    """Same failure mode again, using a pipe (`|`) as the clause-joiner."""
+    event = _rate_decision_event("The target range held | someone raised objections")
+
+    assessment = assess_impact([event], instrument=Instrument.NQ)
+
+    assert assessment.direction is ImpactDirection.NEUTRAL
+    assert assessment.horizon is ImpactHorizon.MULTI_DAY
+    assert "held" in assessment.rationale
+
+
+def test_a_previously_unseen_symbol_clause_join_with_raised_does_not_turn_a_hold_into_mixed() -> (
+    None
+):
+    """Demonstrates the allowlist-by-complement closes the entire class of
+
+    "unlisted punctuation used as a joiner" by construction, not by
+    enumeration: a tilde (`~`), a character not in any of rounds 3-7's
+    enumerated marker lists and not used in any other test in this file, is
+    used here as the clause-joiner. No character-specific logic exists
+    anywhere in `assessment.py` for `~` — it is caught purely because it
+    fails `_DISALLOWED_BETWEEN_SPAN_CHARACTER_PATTERN`'s permitted
+    `[A-Za-z0-9\\s]` set, the same general rule every other test in this
+    section relies on.
+    """
+    event = _rate_decision_event("The target range held ~ someone raised objections")
+
+    assessment = assess_impact([event], instrument=Instrument.NQ)
+
+    assert assessment.direction is ImpactDirection.NEUTRAL
+    assert assessment.horizon is ImpactHorizon.MULTI_DAY
+    assert "held" in assessment.rationale
+
+
 def test_an_instrument_with_no_documented_mapping_is_assessed_as_uncertain_not_reusing_nq() -> None:
     event = _rate_decision_event(
         "The Committee raised the target range for the federal funds rate."

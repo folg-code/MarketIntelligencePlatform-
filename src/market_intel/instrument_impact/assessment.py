@@ -17,32 +17,40 @@ decided by a bounded-proximity test directly on the raw fact string (see
 `_is_related`/`_classify_fact`), not by splitting the string into clauses
 first. For a given trigger-verb occurrence, its nearest anchor-phrase
 occurrence (by word distance, in either order) is related to it only if (1)
-at most two words separate them and (2) no disqualifying marker (a comma,
-semicolon, or one of a fixed set of contrast/coordinating conjunctions,
-relative pronouns, and subordinators — see `_DISQUALIFYING_MARKER_PATTERN`)
-appears anywhere between them. Both conditions must hold; if the nearest
-anchor fails either one, that verb occurrence contributes no signal and is
+at most two words separate them, (2) the span between them contains no
+character outside letters/digits/whitespace (an allowlist-by-complement —
+see `_DISALLOWED_BETWEEN_SPAN_CHARACTER_PATTERN` — so any current or future
+punctuation/symbol used as an informal clause joiner disqualifies by
+construction, with nothing to enumerate), and (3) the span between them
+contains none of a fixed set of contrast/coordinating conjunctions,
+relative pronouns, and subordinators (a closed grammatical vocabulary — see
+`_DISQUALIFYING_MARKER_WORD_PATTERN`). All three conditions must hold; if the nearest
+anchor fails any one, that verb occurrence contributes no signal and is
 never retried against a farther anchor occurrence (e.g. "...target range
 unchanged after some members raised objections" — "raised" is both too far
 from "target range" and separated from it by "after" — contributes no
 signal from that occurrence), and a bare trigger verb with no anchor
 anywhere in the fact (e.g. "The Chair raised concerns about inflation
 risks") contributes no signal at all. The word-distance bound is the primary
-mechanism, not the marker list: it is what closes cases with no lexical
-delimiter at all (e.g. "The Committee having raised rates twice this year
-left the target range unchanged" — a bare participial phrase no marker list
-could ever catch), while the marker list is defense-in-depth for cases that
-are lexically marked but still within the word bound. This is a best-effort
+mechanism, not either marker check: it is what closes cases with no lexical
+or orthographic delimiter at all (e.g. "The Committee having raised rates
+twice this year left the target range unchanged" — a bare participial
+phrase neither marker check could ever catch), while the character
+allowlist and the connector-word blocklist are both defense-in-depth for
+cases that are marked (by punctuation/symbol or by a connector word,
+respectively) but still within the word bound. This is a best-effort
 heuristic, not a syntactic parse: it can under-match (an anchor and verb
 genuinely belonging together but separated by more than two words — e.g. by
 a longer appositive or interposed adverbial phrase — will fail the distance
 bound and the fact will fall through to no-signal rather than being
 classified) or, in principle, over-match on unusual phrasing where an
-unrelated verb happens to sit within two words of an anchor; the guarantee
+unrelated verb happens to sit within two words of an anchor with no
+disqualifying punctuation or connector word between them; the guarantee
 this module makes is narrower than "correctly parses arbitrary English" — it
-is that a verb more than two words (or a lexically marked clause boundary)
-away from every anchor occurrence cannot masquerade as evidence for that
-anchor. Falling through to no signal on ambiguous/unbounded phrasing is
+is that a verb more than two words (or a punctuation-marked or
+connector-word-marked clause boundary) away from every anchor occurrence
+cannot masquerade as evidence for that anchor. Falling through to no signal
+on ambiguous/unbounded phrasing is
 intentional: an omitted signal is preferred over a confidently wrong
 directional call. This module also gates on `Event.type == "rate_decision"`,
 but that upstream Event-level classification is not by itself treated as
@@ -148,14 +156,17 @@ _RATE_ANCHOR_PATTERN: Pattern[str] = re.compile(
 # phrase with no lexical delimiter at all defeats any such list by
 # construction). Relatedness between an anchor-phrase occurrence and a
 # trigger-verb occurrence is instead decided directly on the raw fact
-# string by two independent, both-must-pass conditions (see `_is_related`):
-# (1) at most this many words separate them, and (2) no disqualifying
-# marker (`_DISQUALIFYING_MARKER_PATTERN`) appears in the span between them.
+# string by three independent, all-must-pass conditions (see `_is_related`):
+# (1) at most this many words separate them, (2) no character outside
+# letters/digits/whitespace appears in the span between them
+# (`_DISALLOWED_BETWEEN_SPAN_CHARACTER_PATTERN`), and (3) no disqualifying
+# connector word (`_DISQUALIFYING_MARKER_WORD_PATTERN`) appears in that span.
 # Condition (1) is the primary mechanism — it is what closes the zero-marker
-# case that a marker list alone never could; condition (2) is
-# defense-in-depth for lexically marked cases that still happen to be within
-# the word bound. Do not loosen this bound without re-checking it stays
-# below the shortest observed cross-clause "bleed" distance (~4 words in the
+# case that neither marker check alone ever could; conditions (2) and (3)
+# are both defense-in-depth for cases that are marked (by punctuation/symbol
+# or by a connector word, respectively) but still happen to be within the
+# word bound. Do not loosen this bound without re-checking it stays below
+# the shortest observed cross-clause "bleed" distance (~4 words in the
 # counter-examples that motivated this design); see
 # `tests/instrument_impact/test_assessment.py` for the fixtures this was
 # calibrated against.
@@ -168,49 +179,72 @@ _MAX_WORDS_BETWEEN_ANCHOR_AND_VERB = 2
 # double-counted.
 _BETWEEN_SPAN_WORD_PATTERN: Pattern[str] = re.compile(r"[A-Za-z0-9]+")
 
-# Punctuation/lexical markers that disqualify an anchor<->verb pairing even
-# when it is within the word-distance bound above: contrast/coordinating
-# conjunctions, relative pronouns, and subordinators typically introduce a
-# new subject/clause. This is defense-in-depth, not the primary mechanism
-# (see `_MAX_WORDS_BETWEEN_ANCHOR_AND_VERB`) — it is deliberately not relied
-# upon to close future counter-examples by growing this list further; a
-# case this list misses but the distance bound still catches is the
-# intended, expected outcome, not a gap.
+# Punctuation/symbol check, expressed as an allowlist-by-complement rather
+# than an enumerated blocklist. Earlier rounds enumerated specific
+# disqualifying punctuation characters (comma/semicolon, then
+# sentence-terminal punctuation, then dashes) one closed category at a
+# time — but real-world text also uses ellipses, bullets, slashes,
+# ampersands, pipes, and any number of other symbols as informal clause
+# joiners, and a single validation round found five previously-unenumerated
+# examples at once. Enumeration of "bad" characters cannot converge against
+# that open-ended set. This pattern inverts the check: rather than listing
+# disqualifying characters, it matches anything that is *not* in the
+# always-permitted set, so any current or future punctuation/symbol
+# character disqualifies a pairing by construction, with nothing left to
+# enumerate. The permitted character class deliberately mirrors
+# `_BETWEEN_SPAN_WORD_PATTERN`'s `[A-Za-z0-9]` plus whitespace (the word
+# separator) — it reuses an already-established character class rather than
+# inventing a new one. No punctuation exceptions (e.g. an apostrophe for
+# contractions, a decimal point for percentages) are carved out of this
+# allowlist: all 25 existing fixtures were checked by hand and none needs
+# one (decimals such as "4 to 4-1/4 percent" always trail after the anchor
+# phrase, never sit between an anchor and a trigger verb, and Fed-statement
+# register does not use contractions in this position); if a concrete case
+# is ever found needing one, that is a narrow, single-character-class
+# addition to this permitted set, not a repeat of the old blocklist's
+# unbounded growth pattern.
 #
-# Sentence-terminal punctuation (`.`/`!`/`?`/`:`) and clause-joining dashes
-# (em dash `—`, en dash `–`, and ASCII hyphen-minus `-`, which also covers
-# the common `--` double-hyphen substitute for an em dash) are included
-# alongside the comma/semicolon for a different reason than the
-# word-alternation list above: these are closed, orthographic categories
-# (a fixed, enumerable set of characters), not an open-ended lexical class
-# like relative pronouns/subordinators, so adding them here does not repeat
-# the "ever-growing list can never be complete" problem that motivated
-# moving the primary mechanism to the word-distance bound in round 3 — this
-# is a one-time, exhaustive addition, not the start of another list to
-# maintain. Dashes are treated the same as sentence-terminal punctuation
-# because real prose commonly joins two otherwise-independent clauses with
-# a dash instead of a coordinating conjunction (e.g. "The target range
-# held — someone raised objections."). A bare hyphen-minus is heavily
-# overloaded in real text (hyphenated compound words, negative numbers,
-# mid-word), but `_BETWEEN_SPAN_WORD_PATTERN` already splits any hyphenated
-# word into two separate word-distance-bound tokens, so in this module's
-# domain (Fed rate-decision statements, where the anchor phrase is always
-# preceded by "the") a hyphenated modifier between a genuine anchor and
-# verb already exceeds `_MAX_WORDS_BETWEEN_ANCHOR_AND_VERB` on the
-# pre-existing distance bound alone, before this marker is even reached —
-# see `test_a_hyphenated_compound_word_between_anchor_and_verb_is_not_a_new_false_negative`.
-# Accepted residual risk: an anchor and verb belonging to two *independent*
-# statements with no sentence-terminal punctuation or dash between them at
-# all (e.g. upstream LLM extraction dropping ordinary sentence punctuation
-# from a run-on `fact` string) is not caught by this marker and can still
-# fall inside the word-distance bound — the same "no lexical delimiter at
-# all" limitation class as the zero-marker participial case the distance
-# bound itself was introduced to close, just narrower in practice since it
-# additionally requires punctuation to have been lost upstream. This is
-# accepted MVP risk here, not a defect to fix in this module.
-_DISQUALIFYING_MARKER_PATTERN: Pattern[str] = re.compile(
-    r"[,;.!?:–—-]"
-    r"|\b(?:though|but|while|although|after|and|however"
+# A bare hyphen-minus (now disqualifying like any other non-alphanumeric,
+# non-whitespace character) is heavily overloaded in real text (hyphenated
+# compound words, negative numbers, mid-word), but this does not create a
+# new false negative in this module's domain: `_BETWEEN_SPAN_WORD_PATTERN`
+# already splits any hyphenated word into two separate word-distance-bound
+# tokens, and idiomatic Fed-statement phrasing always has "the" immediately
+# before the anchor phrase ("raised the target range"), so a hyphenated
+# modifier between a genuine anchor and verb already exceeds
+# `_MAX_WORDS_BETWEEN_ANCHOR_AND_VERB` on the pre-existing distance bound
+# alone, before this character check is ever reached — see
+# `test_a_hyphenated_compound_word_between_anchor_and_verb_is_not_a_new_false_negative`.
+_DISALLOWED_BETWEEN_SPAN_CHARACTER_PATTERN: Pattern[str] = re.compile(r"[^A-Za-z0-9\s]")
+
+# Connector-word check, deliberately kept as a blocklist: contrast/
+# coordinating conjunctions, relative pronouns, and subordinators typically
+# introduce a new subject/clause. Unlike the punctuation category above,
+# this is a closed, finite English-grammar vocabulary — zero new gaps have
+# been found in this exact list since it was introduced, across several
+# validation rounds that *did* find gaps in the (now-removed) punctuation
+# enumeration. Words pass through the character allowlist above as ordinary
+# letters, so there is no conflict between the two checks: the allowlist's
+# job is narrowly "reject unrecognized symbols," while whether a specific
+# word (though/who/since/etc.) disqualifies a pairing is decided here,
+# independently. This is defense-in-depth, not the primary mechanism (see
+# `_MAX_WORDS_BETWEEN_ANCHOR_AND_VERB`) — it is deliberately not relied upon
+# to close future counter-examples by growing this list further; a case
+# this list misses but the distance bound still catches is the intended,
+# expected outcome, not a gap.
+#
+# One residual risk remains, unaffected by either check above: an anchor
+# and verb belonging to two *independent* statements with no punctuation or
+# symbol at all between them (e.g. upstream LLM extraction dropping
+# ordinary sentence punctuation from a run-on `fact` string) is not caught
+# by either mechanism and can still fall inside the word-distance bound —
+# the same "no lexical/orthographic delimiter at all" limitation class as
+# the zero-marker participial case the distance bound itself was introduced
+# to close, just narrower in practice since it additionally requires
+# punctuation to have been lost upstream. This is accepted MVP risk here,
+# not a defect to fix in this module.
+_DISQUALIFYING_MARKER_WORD_PATTERN: Pattern[str] = re.compile(
+    r"\b(?:though|but|while|although|after|and|however"
     r"|who|which|that|whose|whom"
     r"|even as|as|since|when|where|once|whereas|unless|if|because|before|until)\b",
     re.IGNORECASE,
@@ -273,17 +307,23 @@ def _words_between(fact: str, match_a: re.Match[str], match_b: re.Match[str]) ->
 def _is_related(fact: str, anchor_match: re.Match[str], verb_match: re.Match[str]) -> bool:
     """Return whether `anchor_match` and `verb_match` are close enough to co-occur.
 
-    Both conditions must hold: at most `_MAX_WORDS_BETWEEN_ANCHOR_AND_VERB`
-    words separate the two matches, and no disqualifying marker
-    (`_DISQUALIFYING_MARKER_PATTERN`) appears anywhere in the span between
-    them. Either failing means the verb occurrence contributes no signal for
-    this anchor; the caller does not fall back to a farther anchor
-    occurrence (see `_classify_fact`).
+    All three conditions must hold: at most `_MAX_WORDS_BETWEEN_ANCHOR_AND_VERB`
+    words separate the two matches, the span between them contains no
+    character outside letters/digits/whitespace
+    (`_DISALLOWED_BETWEEN_SPAN_CHARACTER_PATTERN` — an allowlist-by-complement
+    that disqualifies any punctuation/symbol used as an informal clause
+    joiner), and that same span contains no disqualifying connector word
+    (`_DISQUALIFYING_MARKER_WORD_PATTERN`). Any one failing means the verb
+    occurrence contributes no signal for this anchor; the caller does not
+    fall back to a farther anchor occurrence (see `_classify_fact`).
     """
     if _words_between(fact, anchor_match, verb_match) > _MAX_WORDS_BETWEEN_ANCHOR_AND_VERB:
         return False
     start, end = _span_between(anchor_match, verb_match)
-    return not _DISQUALIFYING_MARKER_PATTERN.search(fact[start:end])
+    between_span = fact[start:end]
+    if _DISALLOWED_BETWEEN_SPAN_CHARACTER_PATTERN.search(between_span):
+        return False
+    return not _DISQUALIFYING_MARKER_WORD_PATTERN.search(between_span)
 
 
 def _classify_fact(fact: str) -> list[_RateAction]:
