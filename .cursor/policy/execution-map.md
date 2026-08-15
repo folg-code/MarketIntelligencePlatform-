@@ -119,6 +119,7 @@ policies:
     - .cursor/policy/engineering.md
     - .cursor/policy/reports.md
     - .cursor/policy/done.md
+    - .cursor/policy/contribution-policy.md
 ```
 
 ### work-definition
@@ -175,7 +176,7 @@ stages:
   IMPLEMENTATION:
     owner: engineer
     skills: [implement-feature]
-    policies: [engineering, testing, reports, done]
+    policies: [engineering, testing, reports, done, contribution-policy]
   VALIDATION:
     owner: tester
     skills: [validate-change]
@@ -183,13 +184,13 @@ stages:
   REVIEW:
     owner: reviewer
     skills: [code-review]
-    policies: [reports, engineering, testing, evidence]
+    policies: [reports, engineering, testing, evidence, contribution-policy]
   DOCUMENTATION_GATE:
     owner: orchestrator
     policies: [documentation, done]
   DONE:
     owner: orchestrator
-    policies: [done, reports]
+    policies: [done, reports, contribution-policy]
 ```
 
 ### bug
@@ -219,7 +220,7 @@ stages:
   IMPLEMENTATION:
     owner: engineer
     skills: [fix-bug]
-    policies: [engineering, testing, reports, done]
+    policies: [engineering, testing, reports, done, contribution-policy]
   VALIDATION:
     owner: tester
     skills: [validate-change]
@@ -227,13 +228,13 @@ stages:
   REVIEW:
     owner: reviewer
     skills: [code-review]
-    policies: [reports, engineering, testing, evidence]
+    policies: [reports, engineering, testing, evidence, contribution-policy]
   DOCUMENTATION_GATE:
     owner: orchestrator
     policies: [documentation, done]
   DONE:
     owner: orchestrator
-    policies: [done, reports]
+    policies: [done, reports, contribution-policy]
 ```
 
 ### refactor
@@ -259,7 +260,7 @@ stages:
   IMPLEMENTATION:
     owner: engineer
     skills: [refactor-safely]
-    policies: [engineering, testing, reports, done]
+    policies: [engineering, testing, reports, done, contribution-policy]
   VALIDATION:
     owner: tester
     skills: [validate-change]
@@ -267,13 +268,13 @@ stages:
   REVIEW:
     owner: reviewer
     skills: [code-review]
-    policies: [reports, engineering, testing, evidence]
+    policies: [reports, engineering, testing, evidence, contribution-policy]
   DOCUMENTATION_GATE:
     owner: orchestrator
     policies: [documentation, done]
   DONE:
     owner: orchestrator
-    policies: [done, reports]
+    policies: [done, reports, contribution-policy]
 ```
 
 ### architecture-change

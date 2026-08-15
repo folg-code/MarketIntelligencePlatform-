@@ -75,6 +75,32 @@ REPLANNING / ESCALATION
   contracts, domain semantics, dependencies, or milestone assumptions to the
   owning authority.
 
+## Parallel Execution
+
+Dispatch independent units of work concurrently instead of serially when
+both conditions hold:
+
+- no blocking dependency exists between them (neither consumes the other's
+  output, per the governing plan/wave), and
+- their declared `write_scope` (see `.cursor/policy/task-packet.md`) does
+  not overlap for the stage being dispatched.
+
+Read-only stages (`ARCHITECTURE_GATE` assessment, independent `VALIDATION`
+checks against already-written code, `REVIEW`) carry no file-write risk and
+should default to parallel dispatch whenever the units are independent,
+even if their later `IMPLEMENTATION` stages cannot be.
+
+If `write_scope` overlaps (e.g. two tickets both add to the same shared
+module or the same linear migration chain), keep the writing stage
+sequential even when the logical dependency graph would otherwise allow
+parallelism — concurrent agents sharing one working tree can silently
+clobber each other's edits. Prefer pipelining instead: start the next
+independent unit's `IMPLEMENTATION` as soon as the current one's files are
+written, without waiting for its `VALIDATION`/`REVIEW` to finish.
+
+Re-verify `write_scope` disjointness before each parallel dispatch; do not
+assume it was already checked for a similar-looking pair of tasks.
+
 ## Handoffs
 
 Use structured artifacts instead of narrative histories. Common handoffs:

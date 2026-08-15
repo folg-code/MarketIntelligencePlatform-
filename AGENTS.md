@@ -106,11 +106,11 @@ different task types.
 AI framework.
 
 The files under `.cursor/` define how AI-assisted engineering is performed
-in this repository. Keep reusable process rules separated from project-specific
-truth: workflows, skills, and shared policy should stay generic where practical,
-while project-specific routing and deviations belong in `context-map.md`,
-`overrides.md`, role descriptions, or the `docs/` and `planning/` sources of
-truth they reference.
+in this repository. Keep `.cursor/` fully generic and project-agnostic:
+agents, skills, workflows, and policy describe reusable process, not this
+project's domain, product, or technology choices. Project-specific truth
+belongs in `docs/` and `planning/`; `context-map.md` and `overrides.md` only
+route to it or record explicit deviations from the universal process.
 
 Use the framework from general to specific:
 

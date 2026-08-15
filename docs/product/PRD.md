@@ -159,19 +159,25 @@ Required quality gates:
 
 ## Unresolved Questions
 
-The following technical/architecture choices are not yet decided and are
-planned to be resolved via a `grill-me` discovery session (see
-`docs/product/roadmap.md` Priorities):
+None currently open. The following technical/architecture choices were
+resolved via a `grill-me` discovery session and are recorded as architecture
+decisions:
 
 - LLM provider and model selection for event extraction and narrative
-  candidate generation,
-- persistence/data-access layer (ORM or direct SQL) on top of PostgreSQL,
-- scheduler mechanism for the 5-minute processing cycle,
-- dashboard frontend approach.
+  candidate generation — resolved by
+  `docs/architecture/decisions/ADR-002-local-llm-via-ollama.md`,
+- persistence/data-access layer (ORM or direct SQL) on top of PostgreSQL —
+  resolved by
+  `docs/architecture/decisions/ADR-003-mvp-technical-stack-persistence-scheduler-deployment-dashboard.md`,
+- scheduler mechanism for the 5-minute processing cycle — resolved by
+  `docs/architecture/decisions/ADR-003-mvp-technical-stack-persistence-scheduler-deployment-dashboard.md`,
+- dashboard frontend approach — resolved by
+  `docs/architecture/decisions/ADR-003-mvp-technical-stack-persistence-scheduler-deployment-dashboard.md`.
 
 ## References
 
-- `docs/MVP_Vision_Architecture_Decisions.md` (source vision document)
+- `docs/product/MVP_Vision_Architecture_Decisions.md` (source vision document)
 - `docs/product/roadmap.md`
 - `docs/architecture/domain-model.md`
 - `docs/architecture/ai-and-evidence.md`
+- `docs/architecture/decisions/` (ADR-001, ADR-002, ADR-003)
