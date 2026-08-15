@@ -35,18 +35,9 @@ Local checks support implementation feedback and do not replace independent vali
 
 ## Output
 
-Produce an `ImplementationReport` containing:
-
-```yaml
-summary:
-structural_changes:
-files_changed:
-behavior_checks:
-quality_checks:
-assumptions:
-problems_discovered:
-unresolved:
-```
+Produce an `ImplementationReport` using `.cursor/policy/reports.md`. Add
+refactor variant fields such as `structural_changes:` and `behavior_checks:`
+when useful.
 
 ## Boundaries
 

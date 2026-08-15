@@ -4,8 +4,8 @@ Reusable AI-assisted engineering template for new projects.
 
 This repository separates:
 
-- universal AI engineering rules in `ai/universal/`,
-- project-specific AI routing in `ai/project/`,
+- Cursor-native AI engineering framework in `.cursor/` (`agents/`, `skills/`,
+  `workflows/`, `policy/`),
 - durable project knowledge in `docs/`,
 - current execution state in `planning/`.
 
@@ -14,7 +14,7 @@ This repository separates:
 Agents should begin with:
 
 1. `AGENTS.md`
-2. `ai/project/context-map.md`
+2. `.cursor/policy/context-map.md`
 
 The default rule is lightweight execution for small, local, reversible work.
 Use full workflows only when risk or governed decisions require them.
@@ -23,9 +23,11 @@ Use full workflows only when risk or governed decisions require them.
 
 ```text
 AGENTS.md
-ai/
-  universal/
-  project/
+.cursor/
+  agents/
+  skills/
+  workflows/
+  policy/
 docs/
   product/
   architecture/

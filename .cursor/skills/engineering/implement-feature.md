@@ -37,20 +37,7 @@ Local checks support implementation feedback and do not replace independent vali
 
 ## Output
 
-Produce an `ImplementationReport` containing:
-
-```yaml
-summary:
-files_changed:
-tests_added:
-checks_run:
-assumptions:
-deviations:
-problems_discovered:
-unresolved:
-```
-
-Report only checks actually executed.
+Produce an `ImplementationReport` using `.cursor/policy/reports.md`.
 
 ## Boundaries
 

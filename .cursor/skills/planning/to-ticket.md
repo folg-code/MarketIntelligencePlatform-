@@ -8,6 +8,9 @@ an executable task or issue.
 Create the smallest durable unit of work that can pass Definition of Ready and
 enter the appropriate execution workflow.
 
+This skill materializes one selected work item into an executable task. It does
+not select the milestone wave; use `plan-wave` for wave selection and sequencing.
+
 Prefer vertical tracer-bullet tasks: thin end-to-end slices that can be
 integrated, exercised, and used for feedback.
 
@@ -45,7 +48,7 @@ Do not repeat discovery or redesign the governing work definition.
 8. Identify unresolved blockers.
 9. Verify that the ticket does not introduce behavior or decisions absent from
    its governing sources.
-10. Determine readiness against the project's Definition of Ready.
+10. Determine readiness by applying `.cursor/policy/readiness.md`.
 
 If the work is too large or contains independent outcomes, split it into
 multiple tickets with explicit dependencies.
@@ -130,6 +133,7 @@ Do not:
 - redesign the governing work definition,
 - include implementation details that belong to the Engineer,
 - create a TaskPacket,
+- select or replan a milestone wave,
 - hide unresolved blockers,
 - combine unrelated outcomes into one ticket,
 - split work by technical layer when a vertical slice is possible.

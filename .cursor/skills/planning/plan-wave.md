@@ -6,6 +6,9 @@ Turn the current milestone state into the smallest useful next wave of executabl
 
 Plan only as far as current evidence justifies.
 
+This skill selects and sequences candidate work for the next wave. It does not
+materialize individual executable tasks; use `to-ticket` for that.
+
 Prefer waves made of vertical tracer bullets: thin end-to-end slices that can be
 integrated early and produce fast feedback.
 
@@ -66,6 +69,7 @@ Do not:
 - create speculative detailed plans for distant work,
 - split waves by technical layer when useful vertical slices are possible,
 - perform task implementation,
+- create or rewrite individual tickets; that belongs to `to-ticket`,
 - hide blockers or unresolved decisions.
 
 > Plan broadly, slice vertically, integrate early.

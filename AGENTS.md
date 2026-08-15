@@ -25,32 +25,36 @@ code lightly, escalate deliberately
 
 ## Universal AI Framework
 
-Reusable AI engineering definitions are stored under:
+Reusable AI engineering definitions are stored under `.cursor/`, organized
+into exactly four folders:
 
 ```text
-ai/universal/
+.cursor/
+|-- agents/
+|-- skills/
+|-- workflows/
+`-- policy/
 ```
 
-### Operating Model
+### Workflows
 
 ```text
-ai/universal/operating-model/
-|-- operating-principles.md
-`-- workflows/
-    |-- index.md
-    |-- lightweight.md
-    |-- feature.md
-    |-- bug.md
-    |-- refactor.md
-    |-- architecture-change.md
-    |-- milestone-development.md
-    `-- milestone-validation.md
+.cursor/workflows/
+|-- index.md
+|-- lightweight.md
+|-- work-definition.md
+|-- feature.md
+|-- bug.md
+|-- refactor.md
+|-- architecture-change.md
+|-- milestone-development.md
+`-- milestone-validation.md
 ```
 
 ### Agents
 
 ```text
-ai/universal/agents/
+.cursor/agents/
 |-- orchestrator.md
 |-- architect.md
 |-- engineer.md
@@ -58,32 +62,64 @@ ai/universal/agents/
 `-- reviewer.md
 ```
 
+Each file is both the role definition (mission, authority, boundaries) and
+the Cursor-native subagent configuration invoked via the Task tool.
+
 ### Skills
 
 ```text
-ai/universal/skills/
+.cursor/skills/
 |-- discovery/
 |-- planning/
 |-- engineering/
 `-- review/
 ```
 
-### Shared Contracts
+### Policy
+
+Operating principles, shared contracts, development policy, and
+project-specific AI configuration are consolidated under one folder:
 
 ```text
-ai/universal/contracts/
+.cursor/policy/
+|-- operating-principles.md
 |-- task-packet.md
 |-- reports.md
 |-- readiness.md
 |-- done.md
 |-- evidence.md
-`-- blockers.md
+|-- blockers.md
+|-- execution-map.md
+|-- workflow-rules.md
+|-- engineering.md
+|-- testing.md
+|-- documentation.md
+|-- contribution-policy.md
+|-- context-map.md
+`-- overrides.md
 ```
 
-Universal files define how AI-assisted engineering is performed.
+`context-map.md` defines which documentation should normally be loaded for
+different task types.
 
-They should not contain project-specific product, domain, architecture, or
-technology assumptions.
+`overrides.md` contains explicit project-level deviations from the universal
+AI framework.
+
+The files under `.cursor/` define how AI-assisted engineering is performed
+in this repository. Keep reusable process rules separated from project-specific
+truth: workflows, skills, and shared policy should stay generic where practical,
+while project-specific routing and deviations belong in `context-map.md`,
+`overrides.md`, role descriptions, or the `docs/` and `planning/` sources of
+truth they reference.
+
+Use the framework from general to specific:
+
+```text
+execution map -> who owns work and which contracts apply
+workflow      -> order of stages and transitions
+skill         -> how to perform one stage
+policy        -> mandatory rules and criteria
+```
 
 ## Project-Specific Knowledge
 
@@ -106,7 +142,8 @@ docs/
 
 Create only the project-specific files that are useful for the current
 project. Missing project documents are not a reason to load broader universal
-context; use `ai/project/context-map.md` to decide what is actually needed.
+context; use `.cursor/policy/context-map.md` to decide what is actually
+needed.
 
 Project-specific execution state should normally be stored under:
 
@@ -117,22 +154,6 @@ planning/
 `-- waves/
 ```
 
-## Project AI Configuration
-
-Project-specific AI configuration is stored under:
-
-```text
-ai/project/
-|-- context-map.md
-`-- overrides.md
-```
-
-`context-map.md` defines which documentation should normally be loaded for
-different task types.
-
-`overrides.md` contains explicit project-level deviations from the universal AI
-framework.
-
 ## Context Rule
 
 Use the smallest sufficient working set.
@@ -142,7 +163,9 @@ Preferred flow:
 ```text
 TASK
   -> CONTEXT MAP
+  -> EXECUTION MAP
   -> WORKFLOW OR LIGHTWEIGHT MODE
+  -> DELEGATION CONTRACT
   -> AGENT
   -> SKILL
   -> RELEVANT PROJECT DOCS
@@ -166,12 +189,13 @@ silently choosing one.
 When starting a task:
 
 1. Read this file.
-2. Consult `ai/project/context-map.md`.
-3. Decide whether lightweight execution is sufficient.
-4. If not lightweight, select the relevant workflow.
-5. Select the relevant agent and skill.
-6. Load only relevant project documentation and code.
-7. Execute according to the selected mode, role, and skill.
+2. Consult `.cursor/policy/context-map.md`.
+3. Consult `.cursor/policy/execution-map.md` when routing or delegating work.
+4. Decide whether lightweight execution is sufficient.
+5. If not lightweight, select the relevant workflow.
+6. Select the relevant agent, skill, and policy set from the execution map.
+7. Load only relevant project documentation and code.
+8. Execute according to the selected mode, role, and skill.
 
 For detailed rules, use the referenced universal and project-specific
 documents.

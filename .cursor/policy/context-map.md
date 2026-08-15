@@ -18,7 +18,15 @@ Always load:
 - this file
 - the directly relevant request, task, or issue
 
+Load `.cursor/policy/execution-map.md` when selecting a workflow stage,
+delegating to an agent, choosing required skills, or checking which policies
+must be enforced.
+
 Then choose the smallest matching route below.
+
+When a referenced project document is large, load only the relevant headings,
+search hits, or narrow excerpts first. Load the full document only when the
+task cannot be executed safely from targeted context.
 
 ## Small Local Code Change
 
@@ -27,9 +35,9 @@ decisions.
 
 Load:
 
-- `ai/universal/operating-model/workflows/lightweight.md`
-- `ai/universal/agents/engineer.md`
-- one relevant engineering skill, if useful
+- `.cursor/workflows/lightweight.md`
+- `.cursor/policy/execution-map.md` when choosing an optional skill or checking authority
+- mapped owner, optional skill, and required policies from `.cursor/policy/execution-map.md`
 - directly affected code
 - directly relevant tests
 
@@ -46,28 +54,43 @@ Escalate if the work may affect product behavior, architecture boundaries,
 public contracts, protected domain semantics, persisted data, external
 integrations, or milestone outcomes.
 
+## Work Definition
+
+Use when the request is unclear, product requirements must be created or
+updated, approved requirements need a technical specification, or an
+authoritative work definition must become an executable task.
+
+Load:
+
+- `.cursor/workflows/work-definition.md`
+- `.cursor/policy/execution-map.md`
+- mapped owner, skill, and policies for the current work-definition stage
+- only the relevant product, architecture, planning, or issue context needed
+  for that stage
+
+Do not load implementation code unless the current stage requires it to define
+the work safely.
+
 ## Feature
 
 Load:
 
-- `ai/universal/operating-model/workflows/feature.md`
-- `ai/universal/agents/engineer.md`
-- `ai/universal/skills/engineering/implement-feature.md`
-- relevant `ai/universal/contracts/` files
+- `.cursor/workflows/feature.md`
+- `.cursor/policy/execution-map.md`
+- mapped owner, skill, and policies for the current feature stage
 - relevant specification, ticket, or PRD sections
 - directly affected code and tests
 
-Add Architect, Tester, or Reviewer context only when the workflow stage requires
-that role.
+Add Architect, Tester, or Reviewer context only when the execution map requires
+that owner or support owner for the current stage.
 
 ## Bug
 
 Load:
 
-- `ai/universal/operating-model/workflows/bug.md`
-- `ai/universal/agents/tester.md` when confirmation or regression evidence is required
-- `ai/universal/agents/engineer.md` when implementing the fix
-- relevant bug skills from `ai/universal/skills/engineering/`
+- `.cursor/workflows/bug.md`
+- `.cursor/policy/execution-map.md`
+- mapped owner, skill, and policies for the current bug stage
 - relevant contracts and expected behavior sources
 - narrow failure path code and tests
 
@@ -78,10 +101,9 @@ cannot be established.
 
 Load:
 
-- `ai/universal/operating-model/workflows/refactor.md`
-- `ai/universal/agents/engineer.md`
-- `ai/universal/skills/engineering/refactor-safely.md`
-- `ai/universal/skills/engineering/establish-behavior-baseline.md` when behavior is not already protected
+- `.cursor/workflows/refactor.md`
+- `.cursor/policy/execution-map.md`
+- mapped owner, skill, and policies for the current refactor stage
 - relevant contracts, affected code, and preservation tests
 
 Escalate if the refactor changes behavior, contracts, domain semantics, or
@@ -91,10 +113,9 @@ architecture boundaries.
 
 Load:
 
-- `ai/universal/operating-model/workflows/architecture-change.md`
-- `ai/universal/agents/architect.md`
-- `ai/universal/skills/review/architecture-assessment.md`
-- `ai/universal/skills/review/architecture-proposal.md` only after assessment confirms architecture change
+- `.cursor/workflows/architecture-change.md`
+- `.cursor/policy/execution-map.md`
+- mapped owner, skill, and policies for the current architecture-change stage
 - relevant architecture docs, ADRs, contracts, and affected module interfaces
 
 Do not load implementation details beyond what is needed to understand
@@ -105,8 +126,8 @@ boundaries and contracts.
 Load:
 
 - the relevant milestone workflow
-- `ai/universal/agents/orchestrator.md`
-- `ai/universal/skills/planning/plan-wave.md` or `ai/universal/skills/review/validate-milestone-outcome.md`
+- `.cursor/policy/execution-map.md`
+- mapped owner, skill, and policies for the current milestone stage
 - `planning/current.md` when present
 - milestone-relevant task outcomes and evidence
 

@@ -18,16 +18,32 @@ unresolved:
 
 ## ImplementationReport
 
+All implementation reports share this base shape:
+
 ```yaml
 summary:
 files_changed:
 tests_added:
+tests_run:
 checks_run:
 assumptions:
 deviations:
 problems_discovered:
 unresolved:
 ```
+
+Variants may add fields when useful:
+
+```yaml
+bug:
+  root_cause:
+refactor:
+  structural_changes:
+  behavior_checks:
+```
+
+Bug fixes may omit `root_cause:` when the fix is evidence-based but the exact
+cause remains uncertain.
 
 ## ValidationReport
 

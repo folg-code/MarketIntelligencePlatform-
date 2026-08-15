@@ -35,18 +35,8 @@ Local checks support implementation feedback and do not replace independent vali
 
 ## Output
 
-Produce an `ImplementationReport` containing:
-
-```yaml
-summary:
-root_cause:
-files_changed:
-tests_run:
-checks_run:
-assumptions:
-problems_discovered:
-unresolved:
-```
+Produce an `ImplementationReport` using `.cursor/policy/reports.md`. Add the
+bug variant field `root_cause:` when known.
 
 ## Boundaries
 
