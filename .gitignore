@@ -1,0 +1,30 @@
+# Local environments
+.venv/
+venv/
+env/
+
+# IDE/editor state
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node cache/build output, for projects that add a frontend later
+node_modules/
+dist/
+build/
+.next/
+
+# Local secrets
+.env
+.env.*
+!.env.example
