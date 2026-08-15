@@ -129,7 +129,22 @@ without an explicit architecture decision:
   outcome under `ADR-001`.
 - **`user_locked`** — see Core Concepts / Invariants above.
 - **Instrument impact direction** — the MVP's directional concept, replacing
-  generic sentiment (see `docs/product/PRD.md` Decisions).
+  generic sentiment (see `docs/product/PRD.md` Decisions). Concrete MVP enum
+  (`docs/product/MVP_Vision_Architecture_Decisions.md` §7): `strongly_bearish`,
+  `bearish`, `mixed`, `neutral`, `bullish`, `strongly_bullish`, `uncertain`
+  (`mixed` = credible impact channels point in opposing directions;
+  `uncertain` = insufficient evidence to determine direction; `neutral` =
+  impact believed limited/non-directional).
+- **Instrument impact horizon** — the `NarrativeInstrumentImpact` field
+  answering how long the assessed impact is expected to stay relevant.
+  Concrete MVP enum (`docs/product/MVP_Vision_Architecture_Decisions.md`
+  §7): `intraday`, `multi_day`, `unknown`.
+- **`NarrativeInstrumentImpact` confirmation state** — a status field on
+  `NarrativeInstrumentImpact` itself, distinct from `Narrative.validity_status`,
+  distinguishing a draft/candidate assessment from one that has passed the
+  `ADR-001` validation layer. Every `NarrativeInstrumentImpact` starts
+  `unconfirmed`; only the validation layer (a later ticket) may move it out
+  of that state.
 
 ## Open Domain Questions
 
@@ -145,6 +160,7 @@ automatic narrative merge/split, full Claim/Fact graph, automated
 ## References
 
 - `docs/product/PRD.md`
+- `docs/product/MVP_Vision_Architecture_Decisions.md`
 - `docs/architecture/overview.md`
 - `docs/architecture/ai-and-evidence.md`
 - `docs/architecture/decisions/ADR-001-llm-decision-boundaries.md`
