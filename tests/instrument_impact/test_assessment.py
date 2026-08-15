@@ -402,6 +402,87 @@ def test_an_unrelated_verb_in_a_second_sentence_does_not_turn_a_hold_into_mixed(
     assert "held" in assessment.rationale
 
 
+def test_an_em_dash_clause_join_with_raised_does_not_turn_a_hold_into_mixed() -> None:
+    """Round-6 validation counter-example: an em dash used as a clause-joiner
+
+    (no comma, semicolon, sentence-terminal punctuation, or listed
+    conjunction/subordinator) between a genuine HOLD anchor+verb pair and an
+    unrelated "raised" clause. Before dashes were added to
+    `_DISQUALIFYING_MARKER_PATTERN`, "raised" fell inside the 2-word distance
+    bound of "target range" with no marker between them, adding a spurious
+    HIKE action alongside the correct HOLD action.
+    """
+    event = _rate_decision_event("The target range held — someone raised objections.")
+
+    assessment = assess_impact([event], instrument=Instrument.NQ)
+
+    assert assessment.direction is ImpactDirection.NEUTRAL
+    assert assessment.horizon is ImpactHorizon.MULTI_DAY
+    assert "held" in assessment.rationale
+
+
+def test_a_double_hyphen_clause_join_with_raised_does_not_turn_a_hold_into_mixed() -> None:
+    """Same failure mode as the em-dash case above, using the common ASCII
+
+    double-hyphen (`--`) substitute for an em dash instead of the literal
+    em-dash character.
+    """
+    event = _rate_decision_event("The target range held -- someone raised objections.")
+
+    assessment = assess_impact([event], instrument=Instrument.NQ)
+
+    assert assessment.direction is ImpactDirection.NEUTRAL
+    assert assessment.horizon is ImpactHorizon.MULTI_DAY
+    assert "held" in assessment.rationale
+
+
+def test_a_spaced_single_hyphen_clause_join_with_raised_does_not_turn_a_hold_into_mixed() -> (
+    None
+):
+    """Same failure mode again, using a spaced single hyphen (` - `), the
+
+    plainest ASCII clause-joining dash convention.
+    """
+    event = _rate_decision_event("The target range held - someone raised objections.")
+
+    assessment = assess_impact([event], instrument=Instrument.NQ)
+
+    assert assessment.direction is ImpactDirection.NEUTRAL
+    assert assessment.horizon is ImpactHorizon.MULTI_DAY
+    assert "held" in assessment.rationale
+
+
+def test_a_hyphenated_compound_word_between_anchor_and_verb_is_not_a_new_false_negative() -> (
+    None
+):
+    """Checks whether adding a bare hyphen to the disqualifying-marker
+
+    pattern creates a *new* false negative for a genuine same-clause
+    anchor+verb pair that happens to contain a hyphenated compound word
+    between them. It does not, in this domain: idiomatic Fed-statement
+    phrasing always has "the" immediately before the anchor phrase
+    ("raised the target range"), and `_BETWEEN_SPAN_WORD_PATTERN` already
+    splits any hyphenated word into two word-distance-bound tokens (e.g.
+    "short-term" -> "short", "term"); "the" plus any hyphenated modifier is
+    therefore always at least 3 tokens, already exceeding
+    `_MAX_WORDS_BETWEEN_ANCHOR_AND_VERB` (2) on the pre-existing,
+    unmodified distance bound alone. This fact is uncertain both before
+    and after this patch, for a reason unrelated to the new dash marker. A
+    hyphenated modifier could only fit inside the 2-word bound by omitting
+    "the" entirely (e.g. "raised short-term target range"), which is not
+    realistic Fed-statement phrasing and does not occur in any of this
+    module's existing fixtures.
+    """
+    event = _rate_decision_event(
+        "The Committee raised the short-term target range for the federal funds rate."
+    )
+
+    assessment = assess_impact([event], instrument=Instrument.NQ)
+
+    assert assessment.direction is ImpactDirection.UNCERTAIN
+    assert assessment.horizon is ImpactHorizon.UNKNOWN
+
+
 def test_an_instrument_with_no_documented_mapping_is_assessed_as_uncertain_not_reusing_nq() -> None:
     event = _rate_decision_event(
         "The Committee raised the target range for the federal funds rate."

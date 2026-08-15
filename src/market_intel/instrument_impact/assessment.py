@@ -177,26 +177,39 @@ _BETWEEN_SPAN_WORD_PATTERN: Pattern[str] = re.compile(r"[A-Za-z0-9]+")
 # case this list misses but the distance bound still catches is the
 # intended, expected outcome, not a gap.
 #
-# Sentence-terminal punctuation (`.`/`!`/`?`/`:`) is included alongside the
-# comma/semicolon for a different reason than the word-alternation list
-# above: it is a closed, orthographic category (there are exactly four
-# sentence-terminal marks in English text), not an open-ended lexical class
-# like relative pronouns/subordinators, so adding it here does not repeat
+# Sentence-terminal punctuation (`.`/`!`/`?`/`:`) and clause-joining dashes
+# (em dash `—`, en dash `–`, and ASCII hyphen-minus `-`, which also covers
+# the common `--` double-hyphen substitute for an em dash) are included
+# alongside the comma/semicolon for a different reason than the
+# word-alternation list above: these are closed, orthographic categories
+# (a fixed, enumerable set of characters), not an open-ended lexical class
+# like relative pronouns/subordinators, so adding them here does not repeat
 # the "ever-growing list can never be complete" problem that motivated
-# moving the primary mechanism to the word-distance bound in round 3 — it
+# moving the primary mechanism to the word-distance bound in round 3 — this
 # is a one-time, exhaustive addition, not the start of another list to
-# maintain. Accepted residual risk: an anchor and verb belonging to two
-# *independent* statements with no sentence-terminal punctuation between
-# them at all (e.g. upstream LLM extraction dropping ordinary sentence
-# punctuation from a run-on `fact` string) is not caught by this marker and
-# can still fall inside the word-distance bound — the same "no lexical
-# delimiter at all" limitation class as the zero-marker participial case
-# the distance bound itself was introduced to close, just narrower in
-# practice since it additionally requires punctuation to have been lost
-# upstream. This is accepted MVP risk here, not a defect to fix in this
-# module.
+# maintain. Dashes are treated the same as sentence-terminal punctuation
+# because real prose commonly joins two otherwise-independent clauses with
+# a dash instead of a coordinating conjunction (e.g. "The target range
+# held — someone raised objections."). A bare hyphen-minus is heavily
+# overloaded in real text (hyphenated compound words, negative numbers,
+# mid-word), but `_BETWEEN_SPAN_WORD_PATTERN` already splits any hyphenated
+# word into two separate word-distance-bound tokens, so in this module's
+# domain (Fed rate-decision statements, where the anchor phrase is always
+# preceded by "the") a hyphenated modifier between a genuine anchor and
+# verb already exceeds `_MAX_WORDS_BETWEEN_ANCHOR_AND_VERB` on the
+# pre-existing distance bound alone, before this marker is even reached —
+# see `test_a_hyphenated_compound_word_between_anchor_and_verb_is_not_a_new_false_negative`.
+# Accepted residual risk: an anchor and verb belonging to two *independent*
+# statements with no sentence-terminal punctuation or dash between them at
+# all (e.g. upstream LLM extraction dropping ordinary sentence punctuation
+# from a run-on `fact` string) is not caught by this marker and can still
+# fall inside the word-distance bound — the same "no lexical delimiter at
+# all" limitation class as the zero-marker participial case the distance
+# bound itself was introduced to close, just narrower in practice since it
+# additionally requires punctuation to have been lost upstream. This is
+# accepted MVP risk here, not a defect to fix in this module.
 _DISQUALIFYING_MARKER_PATTERN: Pattern[str] = re.compile(
-    r"[,;.!?:]"
+    r"[,;.!?:–—-]"
     r"|\b(?:though|but|while|although|after|and|however"
     r"|who|which|that|whose|whom"
     r"|even as|as|since|when|where|once|whereas|unless|if|because|before|until)\b",
