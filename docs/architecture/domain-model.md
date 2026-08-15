@@ -75,6 +75,21 @@ A Narrative is identified by its `canonical_key`; NarrativeEvents and
 EvidencePacks are always resolved through that identity, never through a
 transient cluster hash.
 
+`Narrative 1 --1 EvidencePack` is literal, not conditional: an EvidencePack
+is created together with its Narrative (thin, built from whatever
+NarrativeEvents already exist at that point) and is rebuilt/grown as
+further NarrativeEvents are assigned — it is never created only once some
+evidentiary threshold is met. This is consistent with the Invariants below:
+an EvidencePack always exists for every Narrative, but only certain
+narrative conclusions (e.g. `validity_status = confirmed`, a high-impact
+`NarrativeInstrumentImpact`) additionally require that EvidencePack to have
+reached sufficient strength before they may be finalized. Building/rebuilding
+the EvidencePack (evidence aggregation, independent-source counting) is a
+distinct pipeline stage/component (see `docs/architecture/overview.md` Major
+Components, Data Flow) from `NarrativeEvent` assignment (the narrative
+engine); the two are sequenced by the processing-cycle orchestration, not
+fused into one component.
+
 ## Invariants
 
 - Narrative identity is always `canonical_key`-based; two narratives with the
