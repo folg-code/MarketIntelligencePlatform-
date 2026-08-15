@@ -9,12 +9,19 @@ persists the result).
 
 Per `docs/architecture/domain-model.md` (Invariants, Protected Semantics), a
 `NarrativeInstrumentImpact` must never be inferred solely from
-entity/keyword presence. This module does not check "is this entity/keyword
-present"; it parses the literal content of `Event.extracted_facts` for a
-rate-decision event (`Event.type == "rate_decision"`) to determine what the
-Fed actually did (raised / lowered / held the target range), and the
-resulting `rationale` always quotes the specific fact(s) that drove the
-conclusion. Deliberately narrow MVP scope (see
+entity/keyword presence. This module does not classify a fact on a bare
+action verb (raised/lowered/held/etc.) alone: a fact is only classified as a
+hike/cut/hold if it contains BOTH the action verb AND a rate/target-range
+anchor phrase ("target range" or "federal funds rate") within the same fact
+string. A fact that happens to contain a trigger verb in an unrelated clause
+(e.g. "The Chair raised concerns about inflation risks") is not anchored to
+the target range/federal funds rate and therefore contributes no signal. This
+module also gates on `Event.type == "rate_decision"`, but that upstream
+Event-level classification is not by itself treated as sufficient evidence
+that any given fact under the event literally describes the rate action; the
+anchor+verb check on the fact text is what determines what the Fed actually
+did. The resulting `rationale` always quotes the specific fact(s) that drove
+the conclusion. Deliberately narrow MVP scope (see
 `ImplementationReport.assumptions`): only rate-decision events are
 interpreted; any other `Event.type` contributes no signal and the assessor
 reports `uncertain`/`unknown` rather than guessing.
@@ -87,6 +94,17 @@ _HOLD_PATTERNS: tuple[Pattern[str], ...] = (
     re.compile(r"\bunchanged\b", re.IGNORECASE),
 )
 
+# An action verb alone is not sufficient evidence that a fact describes the
+# literal rate action (e.g. "raised concerns" is not "raised the target
+# range"). A fact is only classifiable if it also names what was
+# raised/lowered/held: the target range or the federal funds rate. This is
+# the anchor the Protected Semantics section of `domain-model.md` requires
+# ("never inferred from keywords alone") — the verb and the anchor must both
+# be literally present in the same fact string.
+_RATE_ANCHOR_PATTERN: Pattern[str] = re.compile(
+    r"\b(?:target range|federal funds rate)\b", re.IGNORECASE
+)
+
 # Only NQ has a mapping today: the MVP's only ingested source family is
 # Fed/FOMC (`docs/architecture/overview.md`, External Integrations), so a
 # rate-decision fact only has a documented, defensible interpretation for the
@@ -102,7 +120,15 @@ _NQ_RATE_ACTION_TO_DIRECTION: dict[_RateAction, ImpactDirection] = {
 
 
 def _classify_fact(fact: str) -> _RateAction | None:
-    """Return the rate action `fact` literally describes, or `None` if none matches."""
+    """Return the rate action `fact` literally describes, or `None` if none matches.
+
+    A bare action verb is never sufficient: `fact` must also contain a
+    rate/target-range anchor ("target range" or "federal funds rate"), or the
+    verb is assumed to describe something else entirely (e.g. "raised
+    concerns", "cut short", "held a briefing") and no signal is produced.
+    """
+    if not _RATE_ANCHOR_PATTERN.search(fact):
+        return None
     if any(pattern.search(fact) for pattern in _HIKE_PATTERNS):
         return _RateAction.HIKE
     if any(pattern.search(fact) for pattern in _CUT_PATTERNS):

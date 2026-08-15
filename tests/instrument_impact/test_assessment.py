@@ -95,6 +95,26 @@ def test_a_rate_decision_event_with_no_classifiable_fact_is_assessed_as_uncertai
     assert assessment.horizon is ImpactHorizon.UNKNOWN
 
 
+def test_a_trigger_verb_used_outside_a_rate_target_range_context_is_not_classified() -> None:
+    """A `rate_decision` event does not guarantee every fact under it literally
+
+    describes the rate action: a fact merely containing a trigger verb (e.g.
+    "raised") without a rate/target-range anchor must fall through to the
+    same no-signal path as if no trigger verb were present at all, never a
+    confident hike/cut/hold. Reproduces the false positive found in
+    validation, where "The Chair raised concerns about persistent inflation
+    risks going forward." was previously misclassified as a hike.
+    """
+    event = _rate_decision_event(
+        "The Chair raised concerns about persistent inflation risks going forward."
+    )
+
+    assessment = assess_impact([event], instrument=Instrument.NQ)
+
+    assert assessment.direction is ImpactDirection.UNCERTAIN
+    assert assessment.horizon is ImpactHorizon.UNKNOWN
+
+
 def test_an_instrument_with_no_documented_mapping_is_assessed_as_uncertain_not_reusing_nq() -> None:
     event = _rate_decision_event(
         "The Committee raised the target range for the federal funds rate."
