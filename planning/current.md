@@ -141,12 +141,26 @@ None currently. (Resolved: Ticket 3 fetches full press-release text from
   module docstring yet. Accepted as a known MVP limitation (Ticket 4
   review, minor, non-blocking); consider adding an explicit docstring note.
 - No integration test yet proves `NarrativeAssignmentService.assign()`'s
-  real `select(...)` executes correctly against a live Postgres session
-  (only the schema was proven live, via migration verification; the
-  service's query logic is proven only against a fake session double,
-  which now at least asserts the correct column/operator is used). Track
-  as follow-up once an integration-DB test fixture exists — likely needed
-  by Ticket 5 (EvidencePack builder) anyway. Ticket 4 review finding.
+  or `EvidencePackService.build_or_update()`'s real `select(...)`
+  executes correctly against a live Postgres session (only the schema
+  was proven live, via migration verification; both services' query
+  logic is proven only against a fake session double, each of which now
+  at least asserts the correct column/operator is used). Track as
+  follow-up once an integration-DB test fixture exists. Ticket 4 review
+  finding, broadened at Ticket 5 review to explicitly cover
+  `EvidencePackService` too.
+- `docs/architecture/domain-model.md`/`ai-and-evidence.md` state the
+  Protected Semantics rule that syndicated repeats of one originating
+  report must count as one independent source, not many — but Ticket
+  5's `compute_independent_source_count` only implements the trivial
+  case (the same `document_id` referenced twice counts once); true
+  cross-Document syndication detection (two distinct Documents
+  republishing one wire story) is unimplemented and untested, per the
+  architect's explicit "no syndication-detection logic needed yet"
+  scoping for the single-source MVP milestone. Not a defect for this
+  ticket, but flagged so a future reader doesn't mistake the Protected
+  Semantics line for an already-complete guarantee. Ticket 5 review
+  finding; revisit once a second source is added (Milestone 2+).
 
 ## Recent Material Discoveries
 
@@ -229,6 +243,49 @@ REVIEW to DONE without an explicit documentation check). Fixed:
   no redundant join table. No ADR. Dispatching to engineer for
   IMPLEMENTATION now (does not wait on Ticket 6's gate, per the
   pipelining rule).
+  **IMPLEMENTATION done (commit `037639a`)**: `EvidencePack` model,
+  migration, pure `COUNT(DISTINCT document_id)` aggregation, thin async
+  service refusing zero-traceable-Document packs, 9 new tests (57/57
+  full suite passing at the time), migration verified live against a
+  disposable Postgres 16 container. Validation was deferred while
+  Ticket 6 (independent, parallel) went through an unusually long
+  7-round fix/validate cycle (see Ticket 6's own branch/PR #1 for that
+  full history) — no changes to this ticket's implementation since.
+  Dispatching first VALIDATION pass now that Ticket 6 is closed out.
+  **VALIDATION: PASS, first attempt, no findings.** Tester independently
+  verified the single most important correctness property with a
+  throwaway script against the real code path (not just trusting test
+  names): two `Event`s sharing one `document_id` correctly dedup to an
+  independent-source count of 1 (not 2); two `Event`s on distinct
+  Documents correctly count as 2. Also independently exercised the
+  zero-traceable-Document refusal (rigged a fake session's `add()` to
+  raise, confirmed it's never called before the guard fires), confirmed
+  no LLM/HTTP import anywhere in the aggregation module, confirmed no
+  `narrative_engine` files touched, confirmed migration chain is a
+  single clean head. 57/57 tests, ruff clean. Proceeding to REVIEW.
+  **REVIEW: PASS_WITH_NOTES.** Confirmed diff scope clean (only Ticket
+  5's own files across 3 commits), `narrative_id` FK genuinely
+  unique+not-null (literal 1--1, not optional), `narrative_engine`
+  boundary held (zero overlap, grepped directly), aggregation is
+  genuine `COUNT(DISTINCT document_id)` via a pure function with no
+  DB/LLM/HTTP dependency, 9 tests are behaviorally meaningful (dedup,
+  growth, refusal, create-vs-update). Confirmed no Ticket 6 content
+  leaked onto this branch. Non-blocking notes actioned: (1) reviewer's
+  sandbox couldn't independently run pytest/ruff — orchestrator
+  independently re-ran, 57/57 pass, ruff clean, closing that gap; (2)
+  syndication-detection scope gap and (3) live-Postgres integration-test
+  gap both added to Tracked Technical Debt above; (4) this branch's
+  `planning/current.md` chore commit bundling Ticket 6 notes is a known,
+  already-anticipated merge-reconciliation item (both tickets' final
+  planning-log content will need manual reconciliation on `main`, not a
+  blocker for either individual PR).
+  **DOCUMENTATION_GATE: run explicitly, logged (not skipped).** Two
+  small tracked-debt additions made (above); no `domain-model.md`/
+  `ai-and-evidence.md` edit needed beyond the architect's earlier
+  literal-1--1 clarification (already committed) — both docs already
+  state the governing policy at the correct level of abstraction. Gate:
+  PASS.
+  **Ticket 5: DONE.**
 - Wave 1 / Ticket 6 — Instrument impact assessor. ARCHITECTURE_GATE
   **APPROVE** (impact CROSS_MODULE, architect): stays fully deterministic/
   rule-based per `overview.md`'s already-accepted boundary (no new LLM
