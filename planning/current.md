@@ -172,11 +172,97 @@ None currently. (Resolved: Ticket 3 fetches full press-release text from
 4. Run `MILESTONE READINESS GATE` once Wave 1 delivers Milestone 1's
    Acceptance Expectations.
 
+## Process Change: contribution-policy + documentation-gate enforcement + parallelization
+
+Per explicit user instruction (2026-08-15): `contribution-policy.md` was
+defined but never wired into any workflow stage's `required_policies`, and
+`DOCUMENTATION_GATE` was being skipped (tickets 1-4 went straight from
+REVIEW to DONE without an explicit documentation check). Fixed:
+
+- `.cursor/policy/execution-map.md` — `contribution-policy` added to
+  `IMPLEMENTATION`, `REVIEW`, and `DONE` stage policies for `feature`,
+  `bug`, and `refactor` workflows, and to `lightweight`.
+- `.cursor/policy/workflow-rules.md` — new "Parallel Execution" section:
+  dispatch independent stages/tickets concurrently when no blocking
+  dependency exists AND `write_scope` doesn't overlap; pipeline instead of
+  parallelize when `write_scope` overlaps (e.g. a shared file or linear
+  migration chain); read-only stages (architecture assessment,
+  independent validation, review) default to parallel whenever the units
+  are independent.
+- `DOCUMENTATION_GATE` will now be run and explicitly logged (even when
+  the answer is "no durable truth changed") before any ticket is marked
+  DONE, instead of being implicitly skipped.
+- One-time exception, by explicit user decision: tickets 1-4 and the
+  `.cursor/`/`docs/` framework work were never branched/PR'd per ticket
+  (all still sat uncommitted on `main` — only 2 commits existed in the
+  entire history before this). Rather than backfill per-ticket
+  branches/PRs retroactively, this was squashed into one collective
+  commit (`8e7a229`) pushed directly to `main` (no PR — nothing to PR
+  against once already on the target branch; a PR would have required a
+  history-rewriting reset that was correctly flagged as unsafe to
+  auto-run). **Starting with Ticket 5**, every ticket gets its own branch
+  (`feat/wave1-ticketN-<slug>`), Conventional Commit-style commits, and a
+  real PR pushed to `origin` (`folg-code/MarketIntelligencePlatform-`).
+- `planning/waves/wave-01-foundation-and-tracer-slice.md` Parallelizable
+  Work section corrected: tickets 5 and 6 were wrongly documented as
+  sequential — both consume ticket 4's output but not each other's, so
+  their `ARCHITECTURE_GATE`/`VALIDATION`/`REVIEW` stages run in parallel;
+  `IMPLEMENTATION` is pipelined (not concurrent) because both touch the
+  shared `persistence/models.py` and the linear Alembic migration chain
+  (resolved via `alembic merge` for the resulting two heads).
+
 ## Next Actions
 
-- Dispatch Wave 1 Ticket 5 (EvidencePack builder — real source traceability
-  and independent-source counting, persisted) through the `feature`
-  workflow stage gates.
+- Wave 1 / Ticket 5 — EvidencePack builder. ARCHITECTURE_GATE **APPROVE**
+  (impact CROSS_MODULE, architect): `EvidencePack` is a separate table
+  (`narrative_id` FK unique+not-null, `independent_source_count`,
+  timestamps), created together with its `Narrative` and rebuilt/grown as
+  `NarrativeEvent`s are added — architect clarified this directly in
+  `docs/architecture/domain-model.md` (Relationships) since it resolved an
+  ambiguity in already-accepted text. Stays a fully separate component
+  from `narrative_engine` (ticket 8/scheduler sequences the two, ticket 5
+  does not touch ticket 4's files). "Real, not hardcoded" means genuine
+  `COUNT(DISTINCT document_id)` over reachable Documents — no
+  syndication-detection logic needed yet (single-source milestone; that's
+  speculative extensibility for now). Source traceability is derived via
+  the existing `Narrative -> NarrativeEvent -> Event -> Document` chain,
+  no redundant join table. No ADR. Dispatching to engineer for
+  IMPLEMENTATION now (does not wait on Ticket 6's gate, per the
+  pipelining rule).
+- Wave 1 / Ticket 6 — Instrument impact assessor. ARCHITECTURE_GATE
+  **APPROVE** (impact CROSS_MODULE, architect): stays fully deterministic/
+  rule-based per `overview.md`'s already-accepted boundary (no new LLM
+  call from this component; ADR-001's permission for LLM-drafted impact
+  stays available for a later ticket, most plausibly by extending event
+  extraction, not by giving this component its own LLM boundary).
+  Deterministic logic must be a genuine documented rule procedure over
+  Event/Narrative content, not bare keyword/entity-presence matching
+  (reviewer must check this explicitly). Concrete `direction` enum
+  (`strongly_bearish`..`strongly_bullish`, `mixed`, `uncertain`) and
+  `horizon` enum (`intraday`/`multi_day`/`unknown`) promoted from
+  `docs/product/MVP_Vision_Architecture_Decisions.md` §7 into
+  `domain-model.md` as canonical domain truth. `NarrativeInstrumentImpact`
+  needs its own `unconfirmed`/(future `confirmed`) status enum, separate
+  from `Narrative.validity_status`, and **must** set
+  `values_callable=lambda e: [m.value for m in e]` (the ticket-4 enum bug
+  must not repeat here). `instrument` is a closed 3-value enum (NQ/BTC/
+  GOLD), not a growing entity. `relevance` type is a genuine local choice
+  (no doc settles it). No EvidencePack required first (unconfirmed impact
+  isn't yet a "material conclusion").
+  **Process note:** this architect's doc edit to `domain-model.md`
+  (Terminology: direction/horizon enums, confirmation-state field) landed
+  in the same shared working tree while Ticket 5's branch was already
+  checked out, and got swept into Ticket 5's doc commit — caught and
+  fixed by amending that commit back down to only Ticket 5's content; the
+  Ticket 6 content is sitting uncommitted for now (safe, additive, no
+  conflict with Ticket 5's in-progress code) and will be committed to
+  Ticket 6's own branch once Ticket 5's implementation lands (git
+  surgery — stash/checkout — is deferred until the Ticket 5 engineer
+  subagent, which is actively writing files right now, finishes, to
+  avoid disturbing its in-progress work). Real lesson for future parallel
+  ARCHITECTURE_GATE dispatches touching shared docs: either serialize doc
+  edits specifically, or accept this kind of cleanup step as the cost of
+  parallelizing analysis stages in one working tree.
 
 ## Replanning Triggers
 
