@@ -202,6 +202,168 @@ def test_a_fact_with_two_independently_valid_but_conflicting_clauses_is_mixed() 
     assert assessment.horizon is ImpactHorizon.UNKNOWN
 
 
+def test_a_relative_pronoun_clause_with_raised_is_not_classified_as_a_hike() -> None:
+    """Round-3 validation counter-example (a): a relative pronoun ("who")
+
+    joins an unrelated "raised" clause to the subject, well outside the
+    2-word bound, before the genuine anchor+verb pair ("left the target
+    range unchanged") appears. Clause-splitting (Fix #2) confidently
+    misclassified this as a hike because "who" was not in its delimiter
+    list; bounded-proximity must reject "raised" on distance alone (and the
+    "who" marker is defense-in-depth on top of that).
+    """
+    event = _rate_decision_event(
+        "Officials who had raised concerns about inflation ultimately left "
+        "the target range unchanged."
+    )
+
+    assessment = assess_impact([event], instrument=Instrument.NQ)
+
+    assert assessment.direction is ImpactDirection.NEUTRAL
+    assert assessment.horizon is ImpactHorizon.MULTI_DAY
+    assert "unchanged" in assessment.rationale
+
+
+def test_a_subordinator_clause_with_raised_is_not_classified_as_a_hike() -> None:
+    """Round-3 validation counter-example (b): the subordinator "even as"
+
+    joins an unrelated "raised" clause trailing the genuine anchor+verb
+    pair. Same failure mode as the relative-pronoun case, different
+    subordinating conjunction and different clause ordering (unrelated
+    clause trails here instead of leading).
+    """
+    event = _rate_decision_event(
+        "The Committee left the target range unchanged even as some "
+        "policymakers raised concerns about sticky inflation."
+    )
+
+    assessment = assess_impact([event], instrument=Instrument.NQ)
+
+    assert assessment.direction is ImpactDirection.NEUTRAL
+    assert assessment.horizon is ImpactHorizon.MULTI_DAY
+    assert "unchanged" in assessment.rationale
+
+
+def test_a_zero_marker_participial_raised_clause_is_not_classified_as_a_hike() -> None:
+    """Round-3 validation counter-example (c): a bare participial phrase
+
+    ("having raised rates twice this year") with **no lexical delimiter at
+    all** between it and the genuine anchor+verb pair. No finite delimiter
+    list could ever catch this — it must be rejected by the word-distance
+    bound itself, which this test asserts is actually what is being
+    exercised (no comma or listed conjunction/subordinator appears anywhere
+    in the fact).
+    """
+    fact = "The Committee having raised rates twice this year left the target range unchanged."
+    assert "," not in fact
+    for marker_word in ("though", "but", "while", "although", "after", "and", "however"):
+        assert marker_word not in fact.lower()
+
+    event = _rate_decision_event(fact)
+
+    assessment = assess_impact([event], instrument=Instrument.NQ)
+
+    assert assessment.direction is ImpactDirection.NEUTRAL
+    assert assessment.horizon is ImpactHorizon.MULTI_DAY
+    assert "unchanged" in assessment.rationale
+
+
+def test_a_different_relative_pronoun_clause_with_raised_is_not_classified_as_a_hike() -> None:
+    """Broader coverage variant of counter-example (a): a different relative
+
+    pronoun ("that" instead of "who") introducing the unrelated "raised"
+    clause, to check the fix generalizes rather than special-casing "who".
+    """
+    event = _rate_decision_event(
+        "The dissent that one member raised did not stop the Committee from "
+        "leaving the target range unchanged."
+    )
+
+    assessment = assess_impact([event], instrument=Instrument.NQ)
+
+    assert assessment.direction is ImpactDirection.NEUTRAL
+    assert assessment.horizon is ImpactHorizon.MULTI_DAY
+    assert "unchanged" in assessment.rationale
+
+
+def test_a_different_subordinator_clause_with_raised_is_not_classified_as_a_hike() -> None:
+    """Broader coverage variant of counter-example (b): a different
+
+    subordinator ("since" instead of "even as") leading the unrelated
+    "raised" clause, to check the fix generalizes rather than special-
+    casing "even as". Deliberately has **no comma** between the two
+    clauses (unlike the "though"/"after" round-2 fixtures): the old
+    clause-splitting code's fixed delimiter list does not include "since",
+    so without a comma to also split on, old code would read this whole
+    fact as one clause and confidently misclassify "raised" as a hike;
+    with a comma present this fixture would pass even against the old
+    code and would not actually exercise the fix.
+    """
+    fact = (
+        "Since one policymaker raised concerns about persistent inflation "
+        "the Committee left the target range unchanged."
+    )
+    assert "," not in fact
+
+    event = _rate_decision_event(fact)
+
+    assessment = assess_impact([event], instrument=Instrument.NQ)
+
+    assert assessment.direction is ImpactDirection.NEUTRAL
+    assert assessment.horizon is ImpactHorizon.MULTI_DAY
+    assert "unchanged" in assessment.rationale
+
+
+def test_a_second_zero_marker_participial_raised_clause_is_not_classified_as_a_hike() -> None:
+    """Broader coverage variant of counter-example (c): a different
+
+    zero-marker participial construction ("despite having raised...")
+    where "despite" is deliberately not in the disqualifying-marker list,
+    so this must also be rejected purely on the word-distance bound rather
+    than any marker, with the unrelated clause trailing instead of leading.
+    """
+    fact = (
+        "The Committee left the target range unchanged despite having "
+        "raised rates at the prior two meetings."
+    )
+    assert "," not in fact
+    for marker_word in (
+        "though",
+        "but",
+        "while",
+        "although",
+        "after",
+        "and",
+        "however",
+        "who",
+        "which",
+        "that",
+        "whose",
+        "whom",
+        "even as",
+        "as",
+        "since",
+        "when",
+        "where",
+        "once",
+        "whereas",
+        "unless",
+        "if",
+        "because",
+        "before",
+        "until",
+    ):
+        assert f" {marker_word} " not in f" {fact.lower()} "
+
+    event = _rate_decision_event(fact)
+
+    assessment = assess_impact([event], instrument=Instrument.NQ)
+
+    assert assessment.direction is ImpactDirection.NEUTRAL
+    assert assessment.horizon is ImpactHorizon.MULTI_DAY
+    assert "unchanged" in assessment.rationale
+
+
 def test_an_instrument_with_no_documented_mapping_is_assessed_as_uncertain_not_reusing_nq() -> None:
     event = _rate_decision_event(
         "The Committee raised the target range for the federal funds rate."

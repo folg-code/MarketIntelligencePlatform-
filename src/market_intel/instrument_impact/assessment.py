@@ -12,33 +12,47 @@ Per `docs/architecture/domain-model.md` (Invariants, Protected Semantics), a
 entity/keyword presence. This module does not classify a fact on a bare
 action verb (raised/lowered/held/etc.) alone: a fact is only classified as a
 hike/cut/hold if it contains BOTH the action verb AND a rate/target-range
-anchor phrase ("target range" or "federal funds rate") within the same
-*clause* of the fact string (see `_split_into_clauses`/`_classify_clause`).
-Clause-scoping means the anchor and verb must appear on the same side of any
-comma, semicolon, or contrast/coordinating conjunction ("though", "but",
-"while", "although", "after", "and", "however"); a trigger verb in a different clause
-from the anchor (e.g. "...target range unchanged after some members raised
-objections") contributes no signal from that unrelated clause, and a bare
-trigger verb with no anchor anywhere in the fact (e.g. "The Chair raised
-concerns about inflation risks") contributes no signal at all. This is a
-best-effort heuristic split, not a syntactic parse: it can under-split (an
-anchor and verb genuinely belonging together but separated by, e.g., an
-appositive comma will fail to co-occur in one clause and the fact will
-fall through to no-signal rather than being classified) or, in principle,
-mis-split unusual phrasing; the guarantee this module makes is narrower than
-"correctly parses arbitrary English" — it is that a verb from one
-plainly-distinct clause cannot masquerade as evidence for an anchor in
-another. Falling through to no signal on ambiguous/under-split phrasing is
+anchor phrase ("target range" or "federal funds rate") that are *related* —
+decided by a bounded-proximity test directly on the raw fact string (see
+`_is_related`/`_classify_fact`), not by splitting the string into clauses
+first. For a given trigger-verb occurrence, its nearest anchor-phrase
+occurrence (by word distance, in either order) is related to it only if (1)
+at most two words separate them and (2) no disqualifying marker (a comma,
+semicolon, or one of a fixed set of contrast/coordinating conjunctions,
+relative pronouns, and subordinators — see `_DISQUALIFYING_MARKER_PATTERN`)
+appears anywhere between them. Both conditions must hold; if the nearest
+anchor fails either one, that verb occurrence contributes no signal and is
+never retried against a farther anchor occurrence (e.g. "...target range
+unchanged after some members raised objections" — "raised" is both too far
+from "target range" and separated from it by "after" — contributes no
+signal from that occurrence), and a bare trigger verb with no anchor
+anywhere in the fact (e.g. "The Chair raised concerns about inflation
+risks") contributes no signal at all. The word-distance bound is the primary
+mechanism, not the marker list: it is what closes cases with no lexical
+delimiter at all (e.g. "The Committee having raised rates twice this year
+left the target range unchanged" — a bare participial phrase no marker list
+could ever catch), while the marker list is defense-in-depth for cases that
+are lexically marked but still within the word bound. This is a best-effort
+heuristic, not a syntactic parse: it can under-match (an anchor and verb
+genuinely belonging together but separated by more than two words — e.g. by
+a longer appositive or interposed adverbial phrase — will fail the distance
+bound and the fact will fall through to no-signal rather than being
+classified) or, in principle, over-match on unusual phrasing where an
+unrelated verb happens to sit within two words of an anchor; the guarantee
+this module makes is narrower than "correctly parses arbitrary English" — it
+is that a verb more than two words (or a lexically marked clause boundary)
+away from every anchor occurrence cannot masquerade as evidence for that
+anchor. Falling through to no signal on ambiguous/unbounded phrasing is
 intentional: an omitted signal is preferred over a confidently wrong
 directional call. This module also gates on `Event.type == "rate_decision"`,
 but that upstream Event-level classification is not by itself treated as
 sufficient evidence that any given fact under the event literally describes
-the rate action; the clause-scoped anchor+verb check on the fact text is
-what determines what the Fed actually did. A single fact whose clauses
-independently yield different actions (e.g. one clause says "raised", a
-different clause says "lowered") contributes one classified entry per
-distinct clause-level action, which feeds the same mixed-signal handling
-used for conflicting facts across events (see `_classified_rate_decision_facts`).
+the rate action; the bounded-proximity anchor+verb check on the fact text is
+what determines what the Fed actually did. A single fact whose independent
+anchor-verb pairs yield different actions (e.g. one pair says "raised", a
+different pair says "lowered") contributes one classified entry per
+distinct action, which feeds the same mixed-signal handling used for
+conflicting facts across events (see `_classified_rate_decision_facts`).
 The resulting `rationale` always quotes the specific fact(s) that drove the
 conclusion. Deliberately narrow MVP scope (see
 `ImplementationReport.assumptions`): only rate-decision events are
@@ -118,26 +132,55 @@ _HOLD_PATTERNS: tuple[Pattern[str], ...] = (
 # range"). A fact is only classifiable if it also names what was
 # raised/lowered/held: the target range or the federal funds rate. This is
 # the anchor the Protected Semantics section of `domain-model.md` requires
-# ("never inferred from keywords alone") — the verb and the anchor must both
-# be literally present in the same *clause* (see `_split_into_clauses`), not
-# merely the same fact string, or an unrelated clause's verb could bleed
-# into an anchor clause that describes a different (or no) action.
+# ("never inferred from keywords alone") — the verb and the anchor must be
+# *related* per the bounded-proximity test below (see `_is_related`), not
+# merely present anywhere in the same fact string, or an unrelated verb
+# could bleed into an anchor's signal to describe a different (or no)
+# action.
 _RATE_ANCHOR_PATTERN: Pattern[str] = re.compile(
     r"\b(?:target range|federal funds rate)\b", re.IGNORECASE
 )
 
-# Clause boundary: a comma/semicolon, or one of the common contrast/
-# coordinating conjunctions that typically introduce a new subject-verb
-# clause in this kind of statement. This is a heuristic textual split, not a
-# grammatical parse — see the module docstring for what it does and does not
-# guarantee. "and" is deliberately included despite being a coordinator
-# rather than a contrast word: without it, a single clause like "...target
-# range unchanged and one member raised objections" would let "raised"
-# (HIKE) win over "unchanged" (HOLD) purely because of `_classify_clause`'s
-# internal HIKE-before-HOLD priority, reproducing the exact cross-clause
-# bleed this fix exists to prevent.
-_CLAUSE_DELIMITER_PATTERN: Pattern[str] = re.compile(
-    r"[,;]|\b(?:though|but|while|although|after|and|however)\b",
+# Bounded-proximity relatedness test, replacing an earlier clause-splitting
+# design. Clause-splitting decided "same clause" via a finite delimiter word
+# list, which is structurally unable to bound English's open-ended set of
+# relative pronouns/subordinators/zero-marker constructs (a bare participial
+# phrase with no lexical delimiter at all defeats any such list by
+# construction). Relatedness between an anchor-phrase occurrence and a
+# trigger-verb occurrence is instead decided directly on the raw fact
+# string by two independent, both-must-pass conditions (see `_is_related`):
+# (1) at most this many words separate them, and (2) no disqualifying
+# marker (`_DISQUALIFYING_MARKER_PATTERN`) appears in the span between them.
+# Condition (1) is the primary mechanism — it is what closes the zero-marker
+# case that a marker list alone never could; condition (2) is
+# defense-in-depth for lexically marked cases that still happen to be within
+# the word bound. Do not loosen this bound without re-checking it stays
+# below the shortest observed cross-clause "bleed" distance (~4 words in the
+# counter-examples that motivated this design); see
+# `tests/instrument_impact/test_assessment.py` for the fixtures this was
+# calibrated against.
+_MAX_WORDS_BETWEEN_ANCHOR_AND_VERB = 2
+
+# Word tokenizer used only to count words strictly *between* an anchor match
+# and a verb match (never to re-tokenize/re-split the fact as a whole):
+# whitespace-delimited runs of letters/digits, with punctuation stripped, so
+# a token like "unchanged," counts as one word rather than being skipped or
+# double-counted.
+_BETWEEN_SPAN_WORD_PATTERN: Pattern[str] = re.compile(r"[A-Za-z0-9]+")
+
+# Punctuation/lexical markers that disqualify an anchor<->verb pairing even
+# when it is within the word-distance bound above: contrast/coordinating
+# conjunctions, relative pronouns, and subordinators typically introduce a
+# new subject/clause. This is defense-in-depth, not the primary mechanism
+# (see `_MAX_WORDS_BETWEEN_ANCHOR_AND_VERB`) — it is deliberately not relied
+# upon to close future counter-examples by growing this list further; a
+# case this list misses but the distance bound still catches is the
+# intended, expected outcome, not a gap.
+_DISQUALIFYING_MARKER_PATTERN: Pattern[str] = re.compile(
+    r"[,;]"
+    r"|\b(?:though|but|while|although|after|and|however"
+    r"|who|which|that|whose|whom"
+    r"|even as|as|since|when|where|once|whereas|unless|if|because|before|until)\b",
     re.IGNORECASE,
 )
 
@@ -155,58 +198,92 @@ _NQ_RATE_ACTION_TO_DIRECTION: dict[_RateAction, ImpactDirection] = {
 }
 
 
-def _split_into_clauses(fact: str) -> list[str]:
-    """Split `fact` into clause-sized chunks on `_CLAUSE_DELIMITER_PATTERN`.
+def _rate_action_verb_matches(fact: str) -> list[tuple[_RateAction, re.Match[str]]]:
+    """Return every (action, match) pair for each trigger-verb occurrence in `fact`.
 
-    Purely textual heuristic (no grammar/parse tree): good enough to keep an
-    anchor and verb from a genuinely unrelated clause from being read as
-    co-occurring, not good enough to guarantee every real clause boundary in
-    arbitrary English is found. Empty/whitespace-only segments (e.g. from a
-    delimiter at the very start or two adjacent delimiters) are dropped.
+    Every occurrence is returned independently, in pattern-group order
+    (HIKE patterns, then CUT, then HOLD) and match order within each
+    pattern — `_classify_fact` is responsible for deciding, per occurrence,
+    whether it is actually related to a nearby anchor before contributing
+    that action; this function does no filtering itself.
     """
-    return [clause for clause in _CLAUSE_DELIMITER_PATTERN.split(fact) if clause.strip()]
+    matches: list[tuple[_RateAction, re.Match[str]]] = []
+    for action, patterns in (
+        (_RateAction.HIKE, _HIKE_PATTERNS),
+        (_RateAction.CUT, _CUT_PATTERNS),
+        (_RateAction.HOLD, _HOLD_PATTERNS),
+    ):
+        for pattern in patterns:
+            matches.extend((action, match) for match in pattern.finditer(fact))
+    return matches
 
 
-def _classify_clause(clause: str) -> _RateAction | None:
-    """Return the rate action one clause literally describes, or `None`.
+def _span_between(match_a: re.Match[str], match_b: re.Match[str]) -> tuple[int, int]:
+    """Return the (start, end) character span strictly between two matches.
 
-    A bare action verb is never sufficient: `clause` must also contain a
-    rate/target-range anchor ("target range" or "federal funds rate") in
-    this same clause, or the verb is assumed to describe something else
-    entirely (e.g. "raised concerns", "cut short", "held a briefing") and no
-    signal is produced. If a clause somehow contains verbs for more than one
-    action (unusual — this generally indicates two actions got merged into
-    one clause by an under-split), HIKE is preferred over CUT over HOLD,
-    mirroring the priority the original whole-fact check used.
+    Order-agnostic: works whether `match_a` or `match_b` occurs first in the
+    string (verb-before-anchor and anchor-before-verb both work). If the two
+    matches overlap or are adjacent, the returned span is empty (`end <=
+    start`).
     """
-    if not _RATE_ANCHOR_PATTERN.search(clause):
-        return None
-    if any(pattern.search(clause) for pattern in _HIKE_PATTERNS):
-        return _RateAction.HIKE
-    if any(pattern.search(clause) for pattern in _CUT_PATTERNS):
-        return _RateAction.CUT
-    if any(pattern.search(clause) for pattern in _HOLD_PATTERNS):
-        return _RateAction.HOLD
-    return None
+    first, second = sorted((match_a, match_b), key=lambda match: match.start())
+    return first.end(), second.start()
+
+
+def _words_between(fact: str, match_a: re.Match[str], match_b: re.Match[str]) -> int:
+    """Count whitespace-delimited, punctuation-stripped words strictly between two matches."""
+    start, end = _span_between(match_a, match_b)
+    if end <= start:
+        return 0
+    return len(_BETWEEN_SPAN_WORD_PATTERN.findall(fact[start:end]))
+
+
+def _is_related(fact: str, anchor_match: re.Match[str], verb_match: re.Match[str]) -> bool:
+    """Return whether `anchor_match` and `verb_match` are close enough to co-occur.
+
+    Both conditions must hold: at most `_MAX_WORDS_BETWEEN_ANCHOR_AND_VERB`
+    words separate the two matches, and no disqualifying marker
+    (`_DISQUALIFYING_MARKER_PATTERN`) appears anywhere in the span between
+    them. Either failing means the verb occurrence contributes no signal for
+    this anchor; the caller does not fall back to a farther anchor
+    occurrence (see `_classify_fact`).
+    """
+    if _words_between(fact, anchor_match, verb_match) > _MAX_WORDS_BETWEEN_ANCHOR_AND_VERB:
+        return False
+    start, end = _span_between(anchor_match, verb_match)
+    return not _DISQUALIFYING_MARKER_PATTERN.search(fact[start:end])
 
 
 def _classify_fact(fact: str) -> list[_RateAction]:
-    """Return every distinct rate action `fact` literally describes, clause-scoped.
+    """Return every distinct rate action `fact` literally describes.
 
-    `fact` is split into clauses (`_split_into_clauses`) and each clause is
-    classified independently (`_classify_clause`); an anchor in one clause
-    can never combine with a verb from a different clause. The distinct
-    actions found (in first-seen order, deduplicated) are returned: usually
-    zero (no signal) or one (a clear action), but a fact whose clauses
-    genuinely disagree (e.g. one clause says "raised", another says
+    Each trigger-verb occurrence in `fact` (`_rate_action_verb_matches`) is
+    paired with its *nearest* anchor-phrase occurrence by word distance
+    (`_words_between`), in either order; the pair contributes that action
+    only if `_is_related` passes for that nearest anchor. If the nearest
+    anchor fails, that verb occurrence contributes no signal — it is never
+    retried against a farther anchor occurrence, preserving this module's
+    "an omitted signal is preferred over a confidently wrong directional
+    call" guarantee. A fact with no anchor occurrence at all short-circuits
+    to no signal without examining any verb. The distinct actions found (in
+    first-seen order, deduplicated) are returned: usually zero (no signal)
+    or one (a clear action), but a fact whose independent anchor-verb pairs
+    genuinely disagree (e.g. one pair says "raised", a different pair says
     "lowered") returns more than one action rather than silently picking a
     winner — callers turn multiple actions into the same mixed-signal
     handling used for conflicting facts across events.
     """
+    anchor_matches = list(_RATE_ANCHOR_PATTERN.finditer(fact))
+    if not anchor_matches:
+        return []
     actions: list[_RateAction] = []
-    for clause in _split_into_clauses(fact):
-        action = _classify_clause(clause)
-        if action is not None and action not in actions:
+    for action, verb_match in _rate_action_verb_matches(fact):
+        if action in actions:
+            continue
+        nearest_anchor = min(
+            anchor_matches, key=lambda anchor: _words_between(fact, anchor, verb_match)
+        )
+        if _is_related(fact, nearest_anchor, verb_match):
             actions.append(action)
     return actions
 
@@ -214,12 +291,12 @@ def _classify_fact(fact: str) -> list[_RateAction]:
 def _classified_rate_decision_facts(events: list[Event]) -> list[_ClassifiedFact]:
     """Collect every classifiable fact from this narrative's rate-decision events.
 
-    A fact whose clauses yield more than one distinct action (see
-    `_classify_fact`) contributes one `_ClassifiedFact` per distinct action,
-    all citing the same fact text; this is a deliberate choice so an
-    internally self-contradictory fact is treated the same as conflicting
-    facts across events, reusing `assess_impact`'s existing mixed-signal
-    resolution rather than duplicating it.
+    A fact whose independent anchor-verb pairs yield more than one distinct
+    action (see `_classify_fact`) contributes one `_ClassifiedFact` per
+    distinct action, all citing the same fact text; this is a deliberate
+    choice so an internally self-contradictory fact is treated the same as
+    conflicting facts across events, reusing `assess_impact`'s existing
+    mixed-signal resolution rather than duplicating it.
     """
     classified: list[_ClassifiedFact] = []
     for event in events:
