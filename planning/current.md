@@ -730,7 +730,8 @@ on each.
   needed. `planning/current.md` itself has been kept current throughout
   (this file). No documentation gap found. Gate: PASS, no changes
   required.
-  **Ticket 6: DONE**, pending push + PR per `contribution-policy.md`.
+  **Ticket 6: DONE.** Pushed to `origin/feat/wave1-ticket6-instrument-
+  impact`; PR opened: https://github.com/folg-code/MarketIntelligencePlatform-/pull/1.
 
 ## Blockers
 
