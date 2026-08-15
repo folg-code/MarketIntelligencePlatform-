@@ -285,7 +285,8 @@ REVIEW to DONE without an explicit documentation check). Fixed:
   literal-1--1 clarification (already committed) — both docs already
   state the governing policy at the correct level of abstraction. Gate:
   PASS.
-  **Ticket 5: DONE.**
+  **Ticket 5: DONE.** Pushed to `origin/feat/wave1-ticket5-evidence-
+  pack`; PR opened: https://github.com/folg-code/MarketIntelligencePlatform-/pull/2.
 - Wave 1 / Ticket 6 — Instrument impact assessor. ARCHITECTURE_GATE
   **APPROVE** (impact CROSS_MODULE, architect): stays fully deterministic/
   rule-based per `overview.md`'s already-accepted boundary (no new LLM
