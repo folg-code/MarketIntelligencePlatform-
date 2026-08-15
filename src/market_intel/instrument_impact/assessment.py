@@ -176,8 +176,27 @@ _BETWEEN_SPAN_WORD_PATTERN: Pattern[str] = re.compile(r"[A-Za-z0-9]+")
 # upon to close future counter-examples by growing this list further; a
 # case this list misses but the distance bound still catches is the
 # intended, expected outcome, not a gap.
+#
+# Sentence-terminal punctuation (`.`/`!`/`?`/`:`) is included alongside the
+# comma/semicolon for a different reason than the word-alternation list
+# above: it is a closed, orthographic category (there are exactly four
+# sentence-terminal marks in English text), not an open-ended lexical class
+# like relative pronouns/subordinators, so adding it here does not repeat
+# the "ever-growing list can never be complete" problem that motivated
+# moving the primary mechanism to the word-distance bound in round 3 — it
+# is a one-time, exhaustive addition, not the start of another list to
+# maintain. Accepted residual risk: an anchor and verb belonging to two
+# *independent* statements with no sentence-terminal punctuation between
+# them at all (e.g. upstream LLM extraction dropping ordinary sentence
+# punctuation from a run-on `fact` string) is not caught by this marker and
+# can still fall inside the word-distance bound — the same "no lexical
+# delimiter at all" limitation class as the zero-marker participial case
+# the distance bound itself was introduced to close, just narrower in
+# practice since it additionally requires punctuation to have been lost
+# upstream. This is accepted MVP risk here, not a defect to fix in this
+# module.
 _DISQUALIFYING_MARKER_PATTERN: Pattern[str] = re.compile(
-    r"[,;]"
+    r"[,;.!?:]"
     r"|\b(?:though|but|while|although|after|and|however"
     r"|who|which|that|whose|whom"
     r"|even as|as|since|when|where|once|whereas|unless|if|because|before|until)\b",

@@ -364,6 +364,44 @@ def test_a_second_zero_marker_participial_raised_clause_is_not_classified_as_a_h
     assert "unchanged" in assessment.rationale
 
 
+def test_an_unrelated_verb_in_a_second_sentence_is_disqualified_by_the_period() -> None:
+    """Round-4 validation counter-example: the disqualifying-marker list had
+
+    no sentence-terminal punctuation, so an unrelated verb in a second short
+    sentence could land within the 2-word distance bound of an anchor in a
+    first, unrelated short sentence. "stayed" is not a HOLD trigger, so the
+    only verb occurrence is "raised"; before the period was added to
+    `_DISQUALIFYING_MARKER_PATTERN`, it fell inside the distance bound of
+    "target range" with no marker between them and was wrongly classified
+    as a hike.
+    """
+    event = _rate_decision_event("The target range stayed. He raised his hand.")
+
+    assessment = assess_impact([event], instrument=Instrument.NQ)
+
+    assert assessment.direction is ImpactDirection.UNCERTAIN
+    assert assessment.horizon is ImpactHorizon.UNKNOWN
+
+
+def test_an_unrelated_verb_in_a_second_sentence_does_not_turn_a_hold_into_mixed() -> None:
+    """Same failure mode as above, but with a genuine HOLD verb ("held") in
+
+    the first sentence: before the period was added to
+    `_DISQUALIFYING_MARKER_PATTERN`, the unrelated "raised" in the second
+    sentence fell inside the distance bound of "target range" with no
+    marker between them, adding a spurious HIKE action alongside the
+    correct HOLD action and producing a mixed-signal result instead of a
+    clean hold.
+    """
+    event = _rate_decision_event("The target range held. Someone raised objections.")
+
+    assessment = assess_impact([event], instrument=Instrument.NQ)
+
+    assert assessment.direction is ImpactDirection.NEUTRAL
+    assert assessment.horizon is ImpactHorizon.MULTI_DAY
+    assert "held" in assessment.rationale
+
+
 def test_an_instrument_with_no_documented_mapping_is_assessed_as_uncertain_not_reusing_nq() -> None:
     event = _rate_decision_event(
         "The Committee raised the target range for the federal funds rate."
