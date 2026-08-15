@@ -101,6 +101,21 @@ written, without waiting for its `VALIDATION`/`REVIEW` to finish.
 Re-verify `write_scope` disjointness before each parallel dispatch; do not
 assume it was already checked for a similar-looking pair of tasks.
 
+Locally-dispatched subagents share one working tree and one checked-out
+branch with the orchestrator. Two units of work whose `IMPLEMENTATION`
+lives on different branches cannot run truly concurrently this way — only
+one branch can be checked out at a time, regardless of `write_scope`.
+Treat "different target branch" as an implicit `write_scope` overlap for
+scheduling purposes: dispatch each branch's writing/checkout-dependent
+stages in its own turn, and do not switch branches while a subagent is
+actively running. Concurrent dispatch remains safe and valuable for
+stages that are read-only with respect to the working tree *and* do not
+require a specific branch to be checked out for correctness (e.g. two
+independent `ARCHITECTURE_GATE` assessments), but even then, a stage that
+writes to a shared file (including project documentation) can still land
+its edit on whichever branch happens to be checked out when it finishes —
+check for and split out cross-branch contamination before committing.
+
 ## Handoffs
 
 Use structured artifacts instead of narrative histories. Common handoffs:
